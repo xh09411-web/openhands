@@ -331,9 +331,7 @@ class SQLAppConversationInfoService(AppConversationInfoService):
 
         return results
 
-    def _non_metrics_metadata_fields(
-        self, info: AppConversationInfo
-    ) -> dict[str, Any]:
+    def _non_metrics_metadata_fields(self, info: AppConversationInfo) -> dict[str, Any]:
         return {
             'selected_repository': info.selected_repository,
             'selected_branch': info.selected_branch,
