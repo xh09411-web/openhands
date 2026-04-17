@@ -24,6 +24,9 @@ outputs:
   labels:
     description: Image labels emitted by docker/metadata-action.
     value: ${{ steps.meta.outputs.labels }}
+  version:
+    description: Sanitized version string (ref-name with any suffix applied). Safe to use in docker tags.
+    value: ${{ steps.meta.outputs.version }}
 
 runs:
   using: composite
