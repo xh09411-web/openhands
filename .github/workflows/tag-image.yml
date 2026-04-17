@@ -1,0 +1,45 @@
+# Adds a git-tag name to existing Docker images.
+# Triggered when a tag is pushed: finds the images built at the tag's commit
+# (tagged `sha-<full>`) and adds the tag name as an alias for the same manifest.
+# No rebuild — pure registry-side retag via `docker buildx imagetools create`.
+name: Tag Docker images
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  retag:
+    runs-on: ubuntu-22.04
+    permissions:
+      packages: write
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Add tag to existing images
+        env:
+          SHA: ${{ github.sha }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Docker tags can't contain "/" — sanitize to match how metadata-action
+          # handles ref names elsewhere in the pipeline.
+          safe_tag="${TAG//\//-}"
+          for image in ghcr.io/openhands/openhands ghcr.io/openhands/enterprise-server; do
+            src="${image}:sha-${SHA}"
+            dst="${image}:${safe_tag}"
+            if ! docker buildx imagetools inspect "$src" > /dev/null 2>&1; then
+              echo "::error::Source image $src does not exist. The Docker workflow for commit $SHA may not have completed successfully. Re-run this workflow once the build finishes."
+              exit 1
+            fi
+            echo "Tagging $dst -> $src"
+            docker buildx imagetools create -t "$dst" "$src"
+          done
