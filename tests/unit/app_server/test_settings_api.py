@@ -215,6 +215,54 @@ async def test_settings_api_endpoints(test_client):
 
 
 @pytest.mark.asyncio
+async def test_get_settings_canonicalizes_known_bare_llm_models(test_client):
+    response = test_client.post(
+        '/api/v1/settings',
+        json=_dump_update(
+            Settings(
+                agent_settings=AgentSettings(llm=LLM(model='claude-sonnet-4-20250514'))
+            )
+        ),
+    )
+    assert response.status_code == 200
+
+    response = test_client.get('/api/v1/settings')
+    assert response.status_code == 200
+    data = response.json()
+    assert (
+        data['agent_settings']['llm']['model'] == 'anthropic/claude-sonnet-4-20250514'
+    )
+    assert data['agent_settings']['llm']['base_url'] is None
+
+
+@pytest.mark.asyncio
+async def test_get_settings_preserves_custom_litellm_proxy_models(test_client):
+    response = test_client.post(
+        '/api/v1/settings',
+        json=_dump_update(
+            Settings(
+                agent_settings=AgentSettings(
+                    llm=LLM(
+                        model='litellm_proxy/gpt-5.3-codex',
+                        base_url='http://custom-proxy.example.com:4000',
+                    )
+                )
+            )
+        ),
+    )
+    assert response.status_code == 200
+
+    response = test_client.get('/api/v1/settings')
+    assert response.status_code == 200
+    data = response.json()
+    assert data['agent_settings']['llm']['model'] == 'litellm_proxy/gpt-5.3-codex'
+    assert (
+        data['agent_settings']['llm']['base_url']
+        == 'http://custom-proxy.example.com:4000'
+    )
+
+
+@pytest.mark.asyncio
 async def test_store_settings_rejects_legacy_nested_payload_keys(test_client):
     response = test_client.post(
         '/api/v1/settings',

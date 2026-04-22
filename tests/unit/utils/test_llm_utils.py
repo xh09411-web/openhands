@@ -4,6 +4,7 @@ from openhands.utils import llm as llm_utils
 from openhands.utils.llm import (
     _assign_provider,
     _derive_verified_models,
+    canonicalize_model_for_ui,
     get_provider_api_base,
     is_openhands_model,
 )
@@ -69,6 +70,56 @@ class TestAssignProvider:
         assert _assign_provider('openai/gpt-5.2') == 'openai/gpt-5.2'
         assert _assign_provider('cohere.command-r-v1:0') == 'cohere.command-r-v1:0'
         assert _assign_provider('custom-model') == 'custom-model'
+
+
+class TestCanonicalizeModelForUi:
+    """Tests for the canonicalize_model_for_ui helper."""
+
+    def test_known_bare_models_get_provider_prefix(self, monkeypatch):
+        """Known bare models should be rewritten for UI consumers."""
+        monkeypatch.setattr(llm_utils, '_BARE_OPENAI_MODELS', {'gpt-5.2'})
+        monkeypatch.setattr(
+            llm_utils, '_BARE_ANTHROPIC_MODELS', {'claude-sonnet-4-20250514'}
+        )
+        monkeypatch.setattr(llm_utils, '_BARE_MISTRAL_MODELS', set())
+
+        assert canonicalize_model_for_ui('gpt-5.2') == 'openai/gpt-5.2'
+        assert (
+            canonicalize_model_for_ui('claude-sonnet-4-20250514')
+            == 'anthropic/claude-sonnet-4-20250514'
+        )
+
+    def test_litellm_proxy_models_get_openhands_prefix(self):
+        """Managed proxy models should be rewritten to the frontend prefix."""
+        assert (
+            canonicalize_model_for_ui(
+                'litellm_proxy/claude-opus-4-5-20251101',
+                base_url='https://llm-proxy.app.all-hands.dev',
+                managed_proxy_url='https://llm-proxy.app.all-hands.dev',
+            )
+            == 'openhands/claude-opus-4-5-20251101'
+        )
+
+    def test_custom_litellm_proxy_models_keep_prefix(self):
+        """Custom LiteLLM proxy endpoints should keep their internal prefix."""
+        assert (
+            canonicalize_model_for_ui(
+                'litellm_proxy/gpt-5.3-codex',
+                base_url='http://custom-proxy.example.com:4000',
+                managed_proxy_url='https://llm-proxy.app.all-hands.dev',
+            )
+            == 'litellm_proxy/gpt-5.3-codex'
+        )
+
+    def test_unknown_and_empty_models_are_preserved(self, monkeypatch):
+        """Unknown model ids should pass through unchanged."""
+        monkeypatch.setattr(llm_utils, '_BARE_OPENAI_MODELS', set())
+        monkeypatch.setattr(llm_utils, '_BARE_ANTHROPIC_MODELS', set())
+        monkeypatch.setattr(llm_utils, '_BARE_MISTRAL_MODELS', set())
+
+        assert canonicalize_model_for_ui('custom-model') == 'custom-model'
+        assert canonicalize_model_for_ui('openai/gpt-5.2') == 'openai/gpt-5.2'
+        assert canonicalize_model_for_ui(None) is None
 
 
 class TestDeriveVerifiedModels:

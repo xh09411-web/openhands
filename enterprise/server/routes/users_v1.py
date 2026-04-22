@@ -11,6 +11,7 @@ from typing import Any, cast
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from server.auth.saas_user_auth import SaasUserAuth
+from server.constants import LITE_LLM_API_URL
 from server.models.user_models import GitOrganizationsResponse, SaasUserInfo
 
 from openhands.app_server.config import (
@@ -23,6 +24,7 @@ from openhands.app_server.sandbox.session_auth import validate_session_key_owner
 from openhands.app_server.user.auth_user_context import AuthUserContext
 from openhands.app_server.user.user_context import UserContext
 from openhands.app_server.utils.dependencies import get_dependencies
+from openhands.utils.llm import canonicalize_model_for_ui
 
 _logger = logging.getLogger(__name__)
 
@@ -48,7 +50,13 @@ def _inject_sdk_compat_fields(
     """
     agent_settings = content.get('agent_settings') or {}
     llm = agent_settings.get('llm') or {}
-    model = llm.get('model')
+    model = canonicalize_model_for_ui(
+        llm.get('model'),
+        base_url=llm.get('base_url'),
+        managed_proxy_url=LITE_LLM_API_URL,
+    )
+    if model is not None:
+        llm['model'] = model
     content['llm_model'] = model
     content['llm_base_url'] = resolve_provider_llm_base_url(model, llm.get('base_url'))
     if include_api_key:

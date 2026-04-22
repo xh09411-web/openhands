@@ -247,6 +247,34 @@ def _assign_provider(model: str) -> str:
     return model
 
 
+def canonicalize_model_for_ui(
+    model: str | None,
+    *,
+    base_url: str | None = None,
+    managed_proxy_url: str | None = None,
+) -> str | None:
+    """Return the canonical UI-facing representation for a model id.
+
+    This helper keeps response payloads stable for frontend consumers:
+
+    * ``litellm_proxy/X`` is rewritten to ``openhands/X`` only when the
+      configured ``base_url`` matches the managed proxy URL.
+    * Known bare LiteLLM model names are prefixed with their canonical
+      provider (e.g. ``claude-sonnet-4-20250514`` ->
+      ``anthropic/claude-sonnet-4-20250514``).
+    * Unknown bare names are returned unchanged.
+    """
+    if model is None:
+        return None
+    if model.startswith('litellm_proxy/'):
+        normalized_base = (base_url or '').rstrip('/')
+        normalized_proxy = (managed_proxy_url or '').rstrip('/')
+        if normalized_base and normalized_base == normalized_proxy:
+            return f'openhands/{model.removeprefix("litellm_proxy/")}'
+        return model
+    return _assign_provider(model)
+
+
 def _derive_verified_models(openhands_models: list[str]) -> list[str]:
     """Extract the bare model names from the ``openhands/…`` model list."""
     return [

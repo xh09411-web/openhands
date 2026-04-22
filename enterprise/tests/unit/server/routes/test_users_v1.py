@@ -343,6 +343,74 @@ class TestSdkCompatFields:
         assert data['llm_base_url'] == 'https://test.com'
 
     @pytest.mark.asyncio
+    async def test_response_canonicalizes_known_bare_models(self, mock_user_context):
+        """Bare known models should be provider-prefixed in the SaaS response."""
+        from unittest.mock import patch
+
+        from server.routes.users_v1 import get_current_user_saas
+
+        from openhands.app_server.user.user_models import UserInfo
+        from openhands.sdk.llm import LLM
+        from openhands.sdk.settings import AgentSettings
+
+        base_user_info = UserInfo(
+            id='user-123',
+            agent_settings=AgentSettings(llm=LLM(model='claude-sonnet-4-20250514')),
+        )
+        mock_user_context.get_user_info = AsyncMock(return_value=base_user_info)
+
+        with patch(
+            'server.routes.users_v1._get_org_info_from_context',
+            return_value=None,
+        ):
+            result = await get_current_user_saas(
+                user_context=mock_user_context, expose_secrets=False
+            )
+
+        data = json.loads(result.body)
+        assert data['llm_model'] == 'anthropic/claude-sonnet-4-20250514'
+        assert (
+            data['agent_settings']['llm']['model']
+            == 'anthropic/claude-sonnet-4-20250514'
+        )
+
+    @pytest.mark.asyncio
+    async def test_response_preserves_custom_litellm_proxy_models(
+        self, mock_user_context
+    ):
+        """Custom LiteLLM proxy models should keep their internal prefix."""
+        from unittest.mock import patch
+
+        from server.routes.users_v1 import get_current_user_saas
+
+        from openhands.app_server.user.user_models import UserInfo
+        from openhands.sdk.llm import LLM
+        from openhands.sdk.settings import AgentSettings
+
+        base_user_info = UserInfo(
+            id='user-123',
+            agent_settings=AgentSettings(
+                llm=LLM(
+                    model='litellm_proxy/gpt-5.3-codex',
+                    base_url='http://custom-proxy.example.com:4000',
+                )
+            ),
+        )
+        mock_user_context.get_user_info = AsyncMock(return_value=base_user_info)
+
+        with patch(
+            'server.routes.users_v1._get_org_info_from_context',
+            return_value=None,
+        ):
+            result = await get_current_user_saas(
+                user_context=mock_user_context, expose_secrets=False
+            )
+
+        data = json.loads(result.body)
+        assert data['llm_model'] == 'litellm_proxy/gpt-5.3-codex'
+        assert data['agent_settings']['llm']['model'] == 'litellm_proxy/gpt-5.3-codex'
+
+    @pytest.mark.asyncio
     async def test_response_contains_mcp_config_at_top_level(self, mock_user_context):
         """Response should include mcp_config at top level."""
         from unittest.mock import patch

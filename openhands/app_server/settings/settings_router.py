@@ -42,6 +42,7 @@ from openhands.sdk.llm import LLM
 from openhands.sdk.settings import ConversationSettings
 from openhands.server.shared import config
 from openhands.utils.llm import (
+    canonicalize_model_for_ui,
     get_provider_api_base,
     is_openhands_model,
     resolve_llm_base_url,
@@ -142,24 +143,22 @@ async def load_settings(
             provider_tokens_set=provider_tokens_set,
         )
 
-        # Convert litellm_proxy/ back to openhands/ for the frontend, but only
-        # if the base_url is the OpenHands proxy. Custom litellm_proxy endpoints
-        # should keep their litellm_proxy/ prefix.
+        # Convert internal / bare model ids to the canonical UI-facing form.
         resp_llm = settings_with_token_data.agent_settings.llm
         normalized_base = (llm.base_url or '').rstrip('/')
-        normalized_proxy = LITE_LLM_API_URL.rstrip('/')
-
-        if resp_llm.model and resp_llm.model.startswith('litellm_proxy/'):
-            # Only convert to openhands/ if using the OpenHands proxy URL
-            if normalized_base == normalized_proxy:
-                resp_llm.model = (
-                    f'openhands/{resp_llm.model.removeprefix("litellm_proxy/")}'
-                )
+        if (
+            canonical_model := canonicalize_model_for_ui(
+                resp_llm.model,
+                base_url=llm.base_url,
+                managed_proxy_url=LITE_LLM_API_URL,
+            )
+        ) is not None:
+            resp_llm.model = canonical_model
 
         # If the base url matches the default for the provider, we don't send it
         # So that the frontend can display basic mode.
         if is_openhands_model(llm.model):
-            if normalized_base == normalized_proxy:
+            if normalized_base == LITE_LLM_API_URL.rstrip('/'):
                 resp_llm.base_url = None
         elif llm.model and llm.base_url == get_provider_api_base(llm.model):
             resp_llm.base_url = None
