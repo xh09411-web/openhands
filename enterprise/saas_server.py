@@ -44,6 +44,7 @@ from server.routes.org_invitations import (  # noqa: E402
 from server.routes.orgs import org_router  # noqa: E402
 from server.routes.readiness import readiness_router  # noqa: E402
 from server.routes.service import service_router  # noqa: E402
+from server.routes.usage_dashboard import usage_dashboard_router  # noqa: E402
 from server.routes.user_app_settings import user_app_settings_router  # noqa: E402
 from server.routes.users_v1 import (  # noqa: E402
     override_users_me_endpoint,
@@ -113,6 +114,7 @@ if GITLAB_APP_CLIENT_ID:
 base_app.include_router(api_keys_router)  # Add routes for API key management
 base_app.include_router(service_router)  # Add routes for internal service API
 base_app.include_router(org_router)  # Add routes for organization management
+base_app.include_router(usage_dashboard_router)  # Add routes for usage dashboard
 base_app.include_router(
     verified_models_router
 )  # Add routes for verified models management

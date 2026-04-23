@@ -6,6 +6,7 @@ import LockIcon from "#/icons/lock.svg?react";
 import MemoryIcon from "#/icons/memory_icon.svg?react";
 import ServerProcessIcon from "#/icons/server-process.svg?react";
 import SettingsGearIcon from "#/icons/settings-gear.svg?react";
+import TachometerIcon from "#/icons/tachometer-fast.svg?react";
 import CircuitIcon from "#/icons/u-circuit.svg?react";
 import PuzzlePieceIcon from "#/icons/u-puzzle-piece.svg?react";
 import UserIcon from "#/icons/user.svg?react";
@@ -35,6 +36,12 @@ export const SAAS_NAV_ITEMS: SettingsNavItem[] = [
     icon: <FiUsers size={22} />,
     to: "/settings/org-members",
     text: "SETTINGS$NAV_ORG_MEMBERS",
+    section: "org",
+  },
+  {
+    icon: <TachometerIcon width={22} height={22} />,
+    to: "/settings/usage-dashboard",
+    text: "SETTINGS$NAV_USAGE_DASHBOARD",
     section: "org",
   },
   {

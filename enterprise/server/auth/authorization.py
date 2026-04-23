@@ -90,6 +90,9 @@ class Permission(str, Enum):
     # Manage Automations
     MANAGE_AUTOMATIONS = 'manage_automations'
 
+    # Analytics and Usage Dashboard
+    VIEW_ANALYTICS = 'view_analytics'
+
 
 class RoleName(str, Enum):
     """Role names used in the system."""
@@ -128,6 +131,8 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             Permission.MANAGE_ORG_CLAIMS,
             # Manage Automations
             Permission.MANAGE_AUTOMATIONS,
+            # Analytics and Usage Dashboard
+            Permission.VIEW_ANALYTICS,
         ]
     ),
     RoleName.ADMIN: frozenset(
@@ -153,6 +158,8 @@ ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
             Permission.MANAGE_ORG_CLAIMS,
             # Manage Automations
             Permission.MANAGE_AUTOMATIONS,
+            # Analytics and Usage Dashboard
+            Permission.VIEW_ANALYTICS,
         ]
     ),
     RoleName.MEMBER: frozenset(

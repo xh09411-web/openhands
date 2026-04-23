@@ -24019,5 +24019,32 @@
     "de": "Keine Git-Organisationen gefunden.",
     "uk": "Організації Git не знайдено.",
     "ca": "No s'han trobat organitzacions Git."
+  },
+  "USAGE_DASHBOARD$TITLE": {
+    "en": "Usage Dashboard"
+  },
+  "USAGE_DASHBOARD$ERROR_LOADING": {
+    "en": "Error loading usage dashboard data"
+  },
+  "USAGE_DASHBOARD$TOTAL_CONVERSATIONS": {
+    "en": "Total Conversations"
+  },
+  "USAGE_DASHBOARD$AVERAGE_COST": {
+    "en": "Average Cost per Conversation"
+  },
+  "USAGE_DASHBOARD$30_DAY_ACTIVITY": {
+    "en": "Conversation Activity (Last 30 Days)"
+  },
+  "USAGE_DASHBOARD$TOP_LLM_MODELS": {
+    "en": "Top 5 LLM Models"
+  },
+  "USAGE_DASHBOARD$TOP_USERS": {
+    "en": "Top Users"
+  },
+  "USAGE_DASHBOARD$NO_DATA": {
+    "en": "No data available"
+  },
+  "SETTINGS$NAV_USAGE_DASHBOARD": {
+    "en": "Usage Dashboard"
   }
 }
