@@ -80,6 +80,18 @@ export default defineConfig(({ mode }) => {
       svgr(),
       tailwindcss(),
     ],
+    resolve: {
+      alias: {
+        "#/services/settings": path.join(
+          AGENT_SERVER_GUI_SRC_ROOT,
+          "services/settings.ts",
+        ),
+        "#/types/agent-state": path.join(
+          AGENT_SERVER_GUI_SRC_ROOT,
+          "types/agent-state.tsx",
+        ),
+      },
+    },
     optimizeDeps: {
       include: [
         // Pre-bundle ALL dependencies to prevent runtime optimization and page reloads

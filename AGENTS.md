@@ -289,6 +289,8 @@ These details may or may not be useful for your current task.
 - Frontend prototype for cross-repo sharing can consume `@openhands/agent-server-gui` directly. In `frontend/tsconfig.json`, `#/*` now falls back from local `src/*` to `node_modules/@openhands/agent-server-gui/src/*`, and `frontend/vite.config.ts` has a matching resolver plugin so local OpenHands-specific modules override shared package modules.
 - For this prototype, most OpenHands route modules are thin wrappers that re-export `@openhands/agent-server-gui/src/routes/*`; OpenHands keeps only backend-specific overrides plus local `src/i18n/{index,translation.json,declaration.ts}` because `npm run make-i18n` reads the local translation file.
 - When running `frontend` in `dev:mock`/`dev:mock:saas` against the shared `@openhands/agent-server-gui/src` prototype, Vite dev mode can hit CJS interop errors from mock websocket dependencies (`@mswjs/socket.io-binding`, `socket.io-parser`) and UI deps (`prop-types`, `react-is`). Keep those in `frontend/vite.config.ts` `optimizeDeps.include` so the mock frontends render during browser QA.
+- For browser QA of the shared-frontend prototype, the work-host proxy (`https://work-1-...`) is more reliable than direct `127.0.0.1` tabs for screenshots. The local mock entrypoint now stays local (`frontend/src/entry.client.tsx` → `src/mocks/browser.ts`) so OpenHands can append `src/mocks/extra-handlers.ts` for prototype-only V1 endpoints like `/api/v1/app-conversations/search` and `/api/v1/users/git-info` without importing the shared package's mock browser as an optimized dependency.
+
 
 
 
