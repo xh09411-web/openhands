@@ -141,7 +141,7 @@ async def get_github_token(request: Request) -> GitHubTokenResponse:
         )
 
     github_token = provider_tokens.get(ProviderType.GITHUB)
-    if not github_token:
+    if not github_token or not github_token.token:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No GitHub token available for this user.',
