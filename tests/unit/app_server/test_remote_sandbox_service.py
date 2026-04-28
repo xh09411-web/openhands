@@ -1315,25 +1315,34 @@ class TestConcurrencyLimits:
     """
 
     @pytest.mark.asyncio
-    async def test_get_effective_limit_returns_global_fallback_when_no_user_id(
+    async def test_get_effective_limit_delegates_to_user_context(
         self, remote_sandbox_service
     ):
-        """Test that _get_user_effective_sandbox_limit returns global fallback when no user ID."""
-        remote_sandbox_service.user_context.get_user_id.return_value = None
+        """Test that _get_user_effective_sandbox_limit delegates to UserContext."""
+        remote_sandbox_service.user_context.get_max_concurrent_sandboxes = AsyncMock(
+            return_value=5
+        )
 
         result = await remote_sandbox_service._get_user_effective_sandbox_limit()
 
-        assert result == 10  # global fallback (max_num_sandboxes)
+        assert result == 5
+        remote_sandbox_service.user_context.get_max_concurrent_sandboxes.assert_called_once_with(
+            10  # max_num_sandboxes passed as default
+        )
 
     @pytest.mark.asyncio
-    async def test_get_effective_limit_returns_global_fallback_in_oss_mode(
+    async def test_get_effective_limit_passes_max_num_sandboxes_as_default(
         self, remote_sandbox_service
     ):
-        """Test that _get_user_effective_sandbox_limit returns global fallback in OSS mode.
+        """Test that _get_user_effective_sandbox_limit passes max_num_sandboxes as default.
 
-        In OSS mode (without enterprise), the storage module imports will fail
-        and the method should return the global fallback.
+        The global fallback (max_num_sandboxes=10) is passed to UserContext,
+        which can use it as the default in OSS mode.
         """
+        remote_sandbox_service.user_context.get_max_concurrent_sandboxes = AsyncMock(
+            return_value=10
+        )
+
         result = await remote_sandbox_service._get_user_effective_sandbox_limit()
 
         assert result == 10  # global fallback (max_num_sandboxes)
