@@ -80,7 +80,7 @@ class SandboxGroupingStrategy(str, Enum):
 #   inputs, enforce the count cap, and take the per-user lock. Accepting a
 #   raw dict here both bypassed those guards and crashed downstream
 #   serialisation.
-_SETTINGS_UPDATE_IGNORED_FIELDS = frozenset(['secrets_store', 'llm_profiles'])
+_SETTINGS_UPDATE_IGNORED_FIELDS = frozenset(['secrets_store', 'llm_profiles', 'saved_agent_configs'])
 
 
 class Settings(BaseModel):
@@ -112,6 +112,7 @@ class Settings(BaseModel):
     git_user_email: str | None = None
     v1_enabled: bool = True
     agent_settings: AgentSettingsConfig = Field(default_factory=default_agent_settings)
+    saved_agent_configs: dict[str, Any] = Field(default_factory=dict)
     conversation_settings: ConversationSettings = Field(
         default_factory=ConversationSettings
     )
@@ -196,12 +197,23 @@ class Settings(BaseModel):
             replace_acp_env = 'acp_env' in agent_update
             acp_env = coerced.pop('acp_env', None) if replace_acp_env else None
 
-            merged = deep_merge(
-                self.agent_settings.model_dump(
+            new_kind = coerced.get('agent_kind')
+            current_kind = self.agent_settings.agent_kind
+
+            if new_kind and new_kind != current_kind:
+                # Switching agent types: snapshot the current config so the user
+                # gets it back if they switch back, then restore any prior snapshot
+                # for the new type (or start from clean defaults).
+                self.saved_agent_configs[current_kind] = self.agent_settings.model_dump(
                     mode='json', context={'expose_secrets': True}
-                ),
-                coerced,
-            )
+                )
+                base = dict(self.saved_agent_configs.get(new_kind, {'agent_kind': new_kind}))
+            else:
+                base = self.agent_settings.model_dump(
+                    mode='json', context={'expose_secrets': True}
+                )
+
+            merged = deep_merge(base, coerced)
             if replace_mcp_config:
                 merged['mcp_config'] = mcp_config
             if replace_acp_env:
