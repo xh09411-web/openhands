@@ -478,9 +478,8 @@ class V1ConversationService {
     conversationUrl: string | null | undefined,
     sessionApiKey?: string | null,
   ): Promise<V1RuntimeConversationInfo> {
-    // ACP conversations supply a full conversationUrl (e.g. http://host/api/acp/conversations/{id})
-    // and must be fetched at that exact path. LLM conversations have no stored URL, so we fall
-    // back to building one from window.location via buildRuntimeUrl.
+    // The backend stamps a full conversationUrl when available; otherwise fall back to
+    // building one from window.location via buildRuntimeUrl.
     const url =
       conversationUrl ??
       this.buildRuntimeUrl(null, `/api/conversations/${conversationId}`);

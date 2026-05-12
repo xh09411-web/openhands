@@ -12,7 +12,7 @@ from jwt import InvalidTokenError
 from pydantic import SecretStr
 
 from openhands import tools  # type: ignore[attr-defined]
-from openhands.agent_server.models import ACPConversationInfo, Success
+from openhands.agent_server.models import ConversationInfo, Success
 from openhands.analytics import get_analytics_service, resolve_analytics_context
 from openhands.app_server.app_conversation.agent_server_routing import acp_display_name
 from openhands.app_server.app_conversation.app_conversation_info_service import (
@@ -299,13 +299,14 @@ async def valid_conversation(
 
 @router.post('/conversations')
 async def on_conversation_update(
-    conversation_info: ACPConversationInfo,
+    conversation_info: ConversationInfo,
     sandbox_info: SandboxInfo = Depends(valid_sandbox),
     app_conversation_info_service: AppConversationInfoService = app_conversation_info_service_dependency,
 ) -> Success:
     """Webhook callback for when a conversation starts, pauses, resumes, or deletes.
 
-    Accepts ACPConversationInfo so ACP-agent conversations are handled too.
+    `ConversationInfo.agent` is the discriminated `AgentBase` union, so both
+    OpenHands `Agent` and `ACPAgent` payloads are accepted on the same route.
     """
     existing = await valid_conversation(
         conversation_info.id, sandbox_info, app_conversation_info_service

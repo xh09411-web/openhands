@@ -42,20 +42,10 @@ from openhands.app_server.settings.settings_models import (
 )
 from openhands.app_server.user.user_context import UserContext
 from openhands.sdk import Agent, Event
-from openhands.sdk.context.agent_context import AgentContext as _AgentContext
 from openhands.sdk.llm import LLM
 from openhands.sdk.secret import LookupSecret, StaticSecret
 from openhands.sdk.settings import AgentSettings, ConversationSettings
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
-
-# True only on SDK versions that include PR #2984 (secrets acp_compatible=True).
-# When False, _build_acp_start_conversation_request skips the agent_context path.
-_SDK_SUPPORTS_ACP_SECRETS = (
-    _AgentContext.model_fields.get('secrets') is not None
-    and isinstance(_AgentContext.model_fields['secrets'].json_schema_extra, dict)
-    and _AgentContext.model_fields['secrets'].json_schema_extra.get('acp_compatible')
-    is True
-)
 
 
 def _build_test_user_agent_settings(user: SimpleNamespace) -> AgentSettings:
@@ -3164,11 +3154,11 @@ class TestAcpProviderEnv:
 
 
 class TestAgentKindConversationUrl:
-    """Regression tests for conversation_url / live-status route dispatch.
+    """Regression tests for the conversation_url stamped on a live AppConversation.
 
-    ``/api/conversations`` for LLM, ``/api/acp/conversations`` for ACP.
-    Getting this wrong makes ACP conversations look stuck on "Loading"
-    because the frontend polls the wrong route and 404s.
+    Since SDK v1.22.0+ both LLM and ACP agents are served from the unified
+    ``/api/conversations`` endpoint, so the URL no longer depends on
+    ``agent_kind``.
     """
 
     def test_build_conversation_url_llm(self):
@@ -3247,32 +3237,8 @@ class TestAgentKindConversationUrl:
         result = service._build_conversation(info, sandbox, None)
         assert result is not None
         assert result.conversation_url == (
-            'http://localhost:8000/api/acp/conversations/'
-            '22222222222222222222222222222222'
+            'http://localhost:8000/api/conversations/22222222222222222222222222222222'
         )
-
-    def test_agent_kind_to_router_path_known_kinds(self):
-        """``'openhands'`` routes to standard conversations; ``'acp'`` to ACP."""
-        from openhands.app_server.app_conversation.live_status_app_conversation_service import (  # noqa: E501
-            _agent_kind_to_router_path,
-        )
-
-        assert _agent_kind_to_router_path('openhands') == 'conversations'
-        assert _agent_kind_to_router_path('acp') == 'acp/conversations'
-
-    def test_agent_kind_to_router_path_unknown_falls_back(self):
-        """Any value that is not 'acp' routes to 'conversations'.
-
-        This includes the legacy ``'llm'`` value that the old default emitted
-        before the rename, so rows stored with ``agent_kind='llm'`` continue to
-        route correctly without a migration.
-        """
-        from openhands.app_server.app_conversation.live_status_app_conversation_service import (  # noqa: E501
-            _agent_kind_to_router_path,
-        )
-
-        assert _agent_kind_to_router_path('llm') == 'conversations'
-        assert _agent_kind_to_router_path('future-variant') == 'conversations'
 
 
 class TestBuildAcpStartConversationRequestSecrets:
@@ -3361,14 +3327,10 @@ class TestBuildAcpStartConversationRequestSecrets:
 
         request = await self._call_build(service, user, tmp_path)
 
-        if _SDK_SUPPORTS_ACP_SECRETS:
-            assert request.agent.agent_context is not None
-            ctx = request.agent.agent_context.secrets
-            assert ctx.get('GITHUB_TOKEN') is github_secret
-            assert ctx.get('MY_API_KEY') is api_secret
-        else:
-            # Pinned SDK doesn't support ACP secrets yet; agent_context stays unset.
-            assert request.agent.agent_context is None
+        assert request.agent.agent_context is not None
+        ctx = request.agent.agent_context.secrets
+        assert ctx.get('GITHUB_TOKEN') is github_secret
+        assert ctx.get('MY_API_KEY') is api_secret
 
     @pytest.mark.asyncio
     async def test_lookup_secret_forwarded_as_source(self, service, tmp_path):
@@ -3381,11 +3343,8 @@ class TestBuildAcpStartConversationRequestSecrets:
 
         request = await self._call_build(service, user, tmp_path)
 
-        if _SDK_SUPPORTS_ACP_SECRETS:
-            assert request.agent.agent_context is not None
-            assert request.agent.agent_context.secrets.get('GITHUB_TOKEN') is lookup
-        else:
-            assert request.agent.agent_context is None
+        assert request.agent.agent_context is not None
+        assert request.agent.agent_context.secrets.get('GITHUB_TOKEN') is lookup
 
     @pytest.mark.asyncio
     async def test_explicit_acp_env_preserved(self, service, tmp_path):
@@ -3413,14 +3372,10 @@ class TestBuildAcpStartConversationRequestSecrets:
         request = await self._call_build(service, user, tmp_path)
 
         assert request.agent.acp_env.get('ANTHROPIC_API_KEY') == 'sk-ui-key'
-        if _SDK_SUPPORTS_ACP_SECRETS:
-            assert request.agent.agent_context is not None
-            assert (
-                request.agent.agent_context.secrets.get('ANTHROPIC_API_KEY')
-                is panel_secret
-            )
-        else:
-            assert request.agent.agent_context is None
+        assert request.agent.agent_context is not None
+        assert (
+            request.agent.agent_context.secrets.get('ANTHROPIC_API_KEY') is panel_secret
+        )
 
     @pytest.mark.asyncio
     async def test_no_secrets_no_agent_context(self, service, tmp_path):
