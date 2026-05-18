@@ -368,13 +368,13 @@ export default function AgentSettingsScreen() {
                 {t(I18nKey.SETTINGS$AGENT_MODEL_HINT)}
               </Typography.Text>
             </div>
-          <ProfileNameInput
-            testId="acp-profile-name-input"
-            value={acpProfileName}
-            onChange={setAcpProfileName}
-            isOptional
-          />
-        </>
+            <ProfileNameInput
+              testId="acp-profile-name-input"
+              value={acpProfileName}
+              onChange={setAcpProfileName}
+              isOptional
+            />
+          </>
         )}
       </div>
 
