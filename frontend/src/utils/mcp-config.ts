@@ -87,18 +87,29 @@ export function parseMcpConfig(value: unknown): MCPConfig {
 }
 
 /**
+ * Generate a unique name for an MCP server, avoiding collisions with existing names.
+ */
+function generateUniqueName(
+  base: string,
+  existingNames: Set<string>,
+): string {
+  if (!existingNames.has(base)) {
+    return base;
+  }
+  let counter = 1;
+  while (existingNames.has(`${base}_${counter}`)) {
+    counter += 1;
+  }
+  return `${base}_${counter}`;
+}
+
+/**
  * Convert the frontend MCPConfig format back to the SDK { mcpServers: { ... } }
  * shape expected by agent_settings.mcp_config on the backend.
  */
 export function toSdkMcpConfig(config: MCPConfig): SdkMcpConfig | null {
   const mcpServers: Record<string, SdkMcpServerConfig> = {};
-  let counter = 0;
-
-  const nextName = (base: string): string => {
-    const name = counter === 0 ? base : `${base}_${counter}`;
-    counter += 1;
-    return name;
-  };
+  const usedNames = new Set<string>();
 
   for (const entry of config.sse_servers) {
     const server: SdkMcpServerConfig = {};
@@ -109,7 +120,9 @@ export function toSdkMcpConfig(config: MCPConfig): SdkMcpConfig | null {
       if (entry.api_key) server.auth = entry.api_key;
     }
     server.transport = "sse";
-    mcpServers[nextName("sse")] = server;
+    const name = generateUniqueName("sse", usedNames);
+    usedNames.add(name);
+    mcpServers[name] = server;
   }
 
   for (const entry of config.shttp_servers) {
@@ -121,7 +134,9 @@ export function toSdkMcpConfig(config: MCPConfig): SdkMcpConfig | null {
       if (entry.api_key) server.auth = entry.api_key;
       if (entry.timeout != null) server.timeout = entry.timeout;
     }
-    mcpServers[nextName("shttp")] = server;
+    const name = generateUniqueName("shttp", usedNames);
+    usedNames.add(name);
+    mcpServers[name] = server;
   }
 
   for (const entry of config.stdio_servers) {
@@ -130,7 +145,12 @@ export function toSdkMcpConfig(config: MCPConfig): SdkMcpConfig | null {
     };
     if (entry.args) server.args = entry.args;
     if (entry.env) server.env = entry.env;
-    mcpServers[nextName(entry.name || "stdio")] = server;
+    // Preserve the existing name for stdio servers; only generate a new name
+    // if the entry has no name or if there's a collision
+    const baseName = entry.name || "stdio";
+    const name = generateUniqueName(baseName, usedNames);
+    usedNames.add(name);
+    mcpServers[name] = server;
   }
 
   return Object.keys(mcpServers).length > 0 ? { mcpServers } : null;
