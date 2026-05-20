@@ -125,20 +125,15 @@ _logger = logging.getLogger(__name__)
 
 # Limits for bootstrap-prompt resume (Solution A of issue #14260).
 #
-# TODO(#14474): Once `software-agent-sdk` is pinned to a version that includes
-# OpenHands/software-agent-sdk#3323, replace the constants and helpers below
-# with imports from `openhands.sdk.event`:
-#   * `_ACP_RESUME_CONTEXT_MARKER` → `RESUME_CONTEXT_MARKER`
-#   * `_content_to_text` → drop (covered by SDK's `content_to_str`)
-#   * `_is_patch_edit` → use `ACPToolCallEvent.is_patch_edit`
-#   * the event-walking loop in `_synthesize_acp_resume_initial_message`
-#     → `render_resume_transcript(events, max_chars=…, max_message_chars=…,
-#         max_tool_chars=…, marker=RESUME_CONTEXT_MARKER)`.
+# The rendering logic below mirrors OpenHands/software-agent-sdk#3323, which
+# adds these primitives to the SDK. Once that version is pinned, this block
+# can be simplified to:
+#   from openhands.sdk.event import RESUME_CONTEXT_MARKER, render_resume_transcript
+#   (see #14474 for the migration checklist)
 # The fetch/pagination wrapper, double-resume guard, and provider-specific
-# scrubbing (`_sanitize_paths`, `_strip_terminal_boilerplate`,
-# `_extract_output_text`, `_format_raw_input`, `_RAW_INPUT_NOISE_KEYS`) stay
-# on the OpenHands side — they encode app-server / Codex-shape concerns the
-# SDK protocol layer deliberately doesn't know about.
+# scrubbing (_sanitize_paths, _strip_terminal_boilerplate, _extract_output_text,
+# _format_raw_input, _RAW_INPUT_NOISE_KEYS) stay here — they encode sandbox-
+# lifecycle and Codex-shape concerns the SDK layer deliberately doesn't know about.
 _ACP_RESUME_MAX_EVENTS = 200  # hard event-count cap (prevents O(N) fetches)
 _ACP_RESUME_CONTEXT_MAX_CHARS = 60_000  # total resume block
 _ACP_RESUME_MESSAGE_MAX_CHARS = 8_000  # per message turn
@@ -146,10 +141,30 @@ _ACP_RESUME_TOOL_MAX_CHARS = 2_000  # per tool event
 _ACP_RESUME_CONTEXT_MARKER = '<<RESUMED CONVERSATION>>'
 
 
-def _truncate_text(text: str, max_chars: int) -> str:
+def _truncate_keep_head(text: str, max_chars: int) -> str:
+    """Truncate to at most max_chars, keeping the start. Honors caps below 4."""
+    if max_chars <= 0:
+        return ''
     if len(text) <= max_chars:
         return text
+    if max_chars < 4:
+        return text[:max_chars]
     return text[: max_chars - 3] + '...'
+
+
+def _truncate_keep_tail(text: str, max_chars: int) -> str:
+    """Truncate to at most max_chars, keeping the end (newest content first).
+
+    Used for the overall resume transcript so that when history is too long the
+    most recent events survive rather than the oldest.
+    """
+    if max_chars <= 0:
+        return ''
+    if len(text) <= max_chars:
+        return text
+    if max_chars < 5:
+        return text[-max_chars:]
+    return '...\n' + text[-(max_chars - 4) :]
 
 
 def _content_to_text(content: Sequence) -> str:
@@ -166,30 +181,110 @@ def _content_to_text(content: Sequence) -> str:
     return '\n'.join(p for p in parts if p)
 
 
+def _message_to_text(event: 'MessageEvent') -> str:
+    """Render all content of a message event (including extended_content)."""
+    message = event.to_llm_message()
+    parts: list[str] = []
+    for item in message.content:
+        if isinstance(item, TextContent):
+            parts.append(item.text)
+        else:
+            image_urls = getattr(item, 'image_urls', None)
+            if image_urls:
+                parts.append(f'[Image: {len(image_urls)} URL(s)]')
+            else:
+                parts.append(f'[{type(item).__name__}]')
+    return '\n'.join(p for p in parts if p)
+
+
 _ABS_PATH_RE = re.compile(r'/[^\s\'",:}\]]{10,}')
 
 
+_BLOCK_FIELD_MISSING: object = object()
+
+
+def _block_field(block: object, *names: str) -> object:
+    """Read the first matching field from ``names`` on a content block.
+
+    Accepts Pydantic model attrs, snake_case dicts (model_dump), and camelCase
+    dicts (ACP JSON wire). Needed so is_patch_edit handles all three shapes.
+    """
+    if isinstance(block, dict):
+        for name in names:
+            if name in block:
+                return block[name]
+        return None
+    for name in names:
+        v = getattr(block, name, _BLOCK_FIELD_MISSING)
+        if v is not _BLOCK_FIELD_MISSING:
+            return v
+    return None
+
+
 def _is_patch_edit(event: 'ACPToolCallEvent') -> bool:
-    """Return True if this edit event is a patch/diff, not a full-file write.
+    """True if this event represents a patch/diff edit (not a full-file write).
 
-    The ACP protocol's ``content`` field carries provider-agnostic diff blocks:
-    - Full-file create (Write): ``content[0].old_text is None``
-    - Patch edit (Edit): ``content[0].old_text`` is set (non-None)
-
-    Using the ``content`` field makes this check work across all ACP providers
-    (Claude Code, Codex, Gemini) regardless of their ``raw_input`` field names.
-    The ``old_string``/``new_string``/``replace_all`` field-name fallback is
-    kept for providers that omit the structured ``content`` but still expose
-    the diff intent through their raw input keys.
+    Scans ALL diff blocks in event.content (multi-file calls can mix writes and
+    patches). Returns True if any diff has old_text set; False only when every
+    diff is a write. Falls back to raw_input only when no diff block exists.
+    Accepts both snake_case (model_dump) and camelCase (wire) field names.
     """
     content = getattr(event, 'content', None) or []
-    if content:
-        first = content[0]
-        if getattr(first, 'type', None) == 'diff':
-            return getattr(first, 'old_text', None) is not None
-    # Fallback: Claude Code-specific field names in raw_input.
-    raw = dict(event.raw_input) if event.raw_input else {}
-    return bool({'old_string', 'new_string'} & raw.keys())
+    diff_blocks = [b for b in content if _block_field(b, 'type') == 'diff']
+    if diff_blocks:
+        return any(
+            _block_field(b, 'old_text', 'oldText') is not None for b in diff_blocks
+        )
+    raw = dict(event.raw_input) if isinstance(event.raw_input, dict) else {}
+    old = raw.get('old_string')
+    return isinstance(old, str) and len(old) > 0
+
+
+def _render_content_block(block: object) -> str | None:
+    """Render one ACP ToolCallContent block as a compact summary.
+
+    Handles diff / content-wrapper / terminal at the top level, plus direct
+    ContentBlock variants (text, image, audio) that some servers emit unwrapped.
+    """
+    block_type = _block_field(block, 'type')
+    if block_type == 'diff':
+        path = _block_field(block, 'path') or ''
+        old_text = _block_field(block, 'old_text', 'oldText')
+        kind = 'patch' if old_text is not None else 'write'
+        header = f'[diff {kind}] {path}'.rstrip()
+        new_text = _block_field(block, 'new_text', 'newText')
+        if isinstance(new_text, str) and new_text:
+            return f'{header}\n{new_text}'
+        return header
+    if block_type == 'content':
+        inner = _block_field(block, 'content')
+        if inner is None:
+            return None
+        return _render_content_block(inner)
+    if block_type == 'terminal':
+        tid = _block_field(block, 'terminal_id', 'terminalId')
+        return f'[terminal {tid}]' if tid else '[terminal]'
+    if block_type == 'text':
+        text = _block_field(block, 'text')
+        if isinstance(text, str) and text:
+            return text
+        return None
+    if block_type == 'image':
+        return '[Image]'
+    if block_type == 'audio':
+        return '[Audio]'
+    if block_type in ('resource', 'resource_link'):
+        return f'[{block_type}]'
+    if block_type:
+        return f'[{block_type}]'
+    return None
+
+
+def _render_content_list(content: list | None) -> list[str]:
+    """Render all renderable blocks from an ACP content list."""
+    if not content:
+        return []
+    return [r for b in content if (r := _render_content_block(b)) is not None]
 
 
 # Pytest/terminal boilerplate lines to strip from command output.
@@ -297,11 +392,11 @@ def _format_raw_input(raw: dict, max_chars: int, is_edit_diff: bool = False) -> 
             change_type = change.get('type', 'edit')
             if content:
                 parts.append(
-                    f'{change_type} {basename}:\n{_truncate_text(content, 400)}'
+                    f'{change_type} {basename}:\n{_truncate_keep_head(content, 400)}'
                 )
             else:
                 parts.append(f'{change_type} {basename}')
-        return _truncate_text('\n'.join(parts), max_chars)
+        return _truncate_keep_head('\n'.join(parts), max_chars)
 
     # General case: filter noise keys, extract command list, sanitize values.
     cleaned: dict[str, object] = {}
@@ -324,7 +419,7 @@ def _format_raw_input(raw: dict, max_chars: int, is_edit_diff: bool = False) -> 
                 out_parts.append(f'{k}={v_san}')
         else:
             out_parts.append(f'{k}={_sanitize_paths(str(v))}')
-    return _truncate_text('\n'.join(out_parts), max_chars)
+    return _truncate_keep_head('\n'.join(out_parts), max_chars)
 
 
 def _sanitize_paths(text: str) -> str:
@@ -1739,8 +1834,8 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             if isinstance(event, MessageEvent):
                 role = event.llm_message.role
                 role_label = '[USER]' if role == 'user' else '[ASSISTANT]'
-                text = _truncate_text(
-                    _content_to_text(event.llm_message.content).strip(),
+                text = _truncate_keep_head(
+                    _message_to_text(event).strip(),
                     _ACP_RESUME_MESSAGE_MAX_CHARS,
                 )
                 if text:
@@ -1753,31 +1848,37 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                     and _tool_terminal.get(event.tool_call_id) is not event
                 ):
                     continue
-                # Also skip placeholder events with no input and no output — these
-                # are ACP streaming artifacts emitted before Claude knows the params.
-                if not event.raw_input and not event.raw_output and not event.is_error:
+                # Placeholder events have no input, no output, no error, and no
+                # Skip placeholder events (ACP streams these before params arrive).
+                # raw_input: treat empty-dict {} the same as None — no payload.
+                # raw_output: use is-None so falsey scalars (0, False, "") survive.
+                if (
+                    not event.raw_input
+                    and event.raw_output is None
+                    and not event.is_error
+                    and not event.content
+                ):
                     continue
                 status = 'failed' if event.is_error else (event.status or 'completed')
-                # Sanitize the title: some providers (Codex) embed absolute
-                # paths directly in the tool name.
                 name = _sanitize_paths(event.title or event.tool_kind or 'tool')
-                raw_in = dict(event.raw_input) if event.raw_input else {}
+                raw_in = dict(event.raw_input) if isinstance(event.raw_input, dict) else {}
                 is_edit_diff = _is_patch_edit(event)
                 detail_parts: list[str] = []
                 if raw_in:
                     detail_parts.append(
                         f'input:\n{_format_raw_input(raw_in, 800, is_edit_diff=is_edit_diff)}'
                     )
-                if event.raw_output:
+                content_lines = _render_content_list(event.content)
+                if content_lines:
+                    detail_parts.append('content:\n' + '\n'.join(content_lines))
+                if event.raw_output is not None:
                     raw_out = _strip_terminal_boilerplate(
                         _sanitize_paths(_extract_output_text(event.raw_output))
                     )
-                    # For failed runs show the tail (failure details), not the head
-                    # (passing tests). Failures are always at the end of pytest output.
                     if event.is_error and len(raw_out) > 800:
                         raw_out = '...\n' + raw_out[-800:]
                     else:
-                        raw_out = _truncate_text(raw_out, 800)
+                        raw_out = _truncate_keep_head(raw_out, 800)
                     detail_parts.append(f'output:\n{raw_out}')
                 detail_str = (
                     '\n'
@@ -1788,26 +1889,24 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                     else ''
                 )
                 lines.append(
-                    _truncate_text(
+                    _truncate_keep_head(
                         f'[TOOL USE: {name}] ({status}){detail_str}',
                         _ACP_RESUME_TOOL_MAX_CHARS,
                     )
                 )
                 lines.append('')
             elif isinstance(event, ActionEvent):
-                # Render the agent's own finish message as a summary line.
-                # This is the most concise description of what was accomplished.
                 msg = getattr(event.action, 'message', None) if event.action else None
                 if msg and isinstance(msg, str):
                     lines.append(
-                        f'[AGENT]: {_truncate_text(_sanitize_paths(msg.strip()), _ACP_RESUME_MESSAGE_MAX_CHARS)}'
+                        f'[AGENT]: {_truncate_keep_head(_sanitize_paths(msg.strip()), _ACP_RESUME_MESSAGE_MAX_CHARS)}'
                     )
                     lines.append('')
 
         if not lines:
             return None
 
-        header = [
+        header_lines = [
             _ACP_RESUME_CONTEXT_MARKER,
             '',
             (
@@ -1817,11 +1916,20 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             ),
             '',
         ]
-        footer = ['--- End of prior session ---']
-        resume_text = _truncate_text(
-            '\n'.join(header + lines + footer),
-            _ACP_RESUME_CONTEXT_MAX_CHARS,
-        )
+        footer_line = '--- End of prior session ---'
+        header_str = '\n'.join(header_lines)
+        body_str = '\n'.join(lines)
+        footer_str = footer_line
+
+        # Assemble; when body is too long keep the tail (newest events survive)
+        # rather than the oldest. Header and footer are preserved as anchors.
+        sep = '\n\n'
+        overhead = len(header_str) + len(sep) + len(sep) + len(footer_str)
+        body_budget = _ACP_RESUME_CONTEXT_MAX_CHARS - overhead
+        if body_budget >= 5:
+            body_str = _truncate_keep_tail(body_str, body_budget)
+        full = header_str + sep + body_str + sep + footer_str
+        resume_text = full[:_ACP_RESUME_CONTEXT_MAX_CHARS]
 
         if initial_message is None:
             return SendMessageRequest(

@@ -3766,7 +3766,11 @@ class TestSynthesizeAcpResumeInitialMessage:
 
     @pytest.mark.asyncio
     async def test_long_conversation_truncated_to_max_chars(self, service):
-        """Output is capped at _ACP_RESUME_CONTEXT_MAX_CHARS and ends with '...'."""
+        """Output is capped at _ACP_RESUME_CONTEXT_MAX_CHARS.
+
+        Tail-preserving: newest events survive and the footer is kept intact.
+        The oldest events are dropped (head of the body is truncated with '...').
+        """
         from openhands.app_server.app_conversation.live_status_app_conversation_service import (
             _ACP_RESUME_CONTEXT_MAX_CHARS,
         )
@@ -3783,7 +3787,10 @@ class TestSynthesizeAcpResumeInitialMessage:
         assert result is not None
         text = result.content[0].text
         assert len(text) <= _ACP_RESUME_CONTEXT_MAX_CHARS
-        assert text.endswith('...')
+        # Tail-preserving: footer survives instead of being cut off.
+        assert text.endswith('--- End of prior session ---')
+        # Body was head-truncated to fit; the cut marker appears somewhere.
+        assert '...' in text
 
     @pytest.mark.asyncio
     async def test_event_count_cap_stops_pagination(self, service):
