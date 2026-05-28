@@ -810,7 +810,6 @@ class TestLiveStatusAppConversationService:
         # Assert
         assert path == '/workspace/project/agents-tmp-config/PLAN.md'
 
-
     def test_build_observability_context_includes_repository(self):
         conversation_id = uuid4()
 
