@@ -14,31 +14,48 @@ export interface TopTab {
   icon?: string;
 }
 
-export const topTabs: TopTab[] = [
-  // ── OpenHands (OSS + Cloud) ──────────────────────────────────────────────
-  { id: 'introduction',     title: 'Introduction',     slug: '/' },
-  { id: 'getting-started',  title: 'Getting Started',  slug: '/getting-started' },
-  { id: 'installation',     title: 'Installation',     slug: '/installation' },
-  { id: 'products',         title: 'Products',         slug: '/products' },
-  { id: 'features',         title: 'Features',         slug: '/features' },
-  { id: 'api',              title: 'API Reference',    slug: '/api' },
-  { id: 'configuration',    title: 'Configuration',    slug: '/configuration' },
-  { id: 'integrations',     title: 'Integrations',     slug: '/integrations' },
-  { id: 'enterprise',       title: 'Enterprise',       slug: '/enterprise' },
-  { id: 'contributing',     title: 'Contributing',     slug: '/contributing' },
-  { id: 'changelog',        title: 'Changelog',        slug: '/changelog' },
+export interface Repo {
+  id: string;
+  title: string;
+  defaultTab: string;
+}
 
-  // ── Deploy Repo ──────────────────────────────────────────────────────────
-  { id: 'deploy-overview',     title: 'Deploy: Overview',     slug: '/deploy' },
-  { id: 'deploy-architecture', title: 'Deploy: Architecture', slug: '/deploy/architecture' },
-  { id: 'deploy-components',   title: 'Deploy: Components',   slug: '/deploy/components' },
-  { id: 'environments',        title: 'Environments',         slug: '/deploy/environments' },
-  { id: 'release-and-deploy',  title: 'Release & Deploy',     slug: '/deploy/release' },
-  { id: 'secrets-and-ops',     title: 'Secrets & Ops',        slug: '/deploy/secrets' },
-  { id: 'deploy-testing',      title: 'Deploy: Testing',      slug: '/deploy/testing' },
-  { id: 'cicd-reference',      title: 'CI/CD Reference',      slug: '/deploy/cicd' },
-  { id: 'deploy-dev-guide',    title: 'Deploy: Dev Guide',    slug: '/deploy/dev-guide' },
+// ── Level 1: Repos ──────────────────────────────────────────────────────────
+export const repos: Repo[] = [
+  { id: 'openhands', title: 'OpenHands', defaultTab: 'introduction' },
+  { id: 'deploy',    title: 'Deploy',    defaultTab: 'deploy-overview' },
 ];
+
+// ── Level 2: Sub-tabs per repo ───────────────────────────────────────────────
+export const tabsByRepo: Record<string, TopTab[]> = {
+  openhands: [
+    { id: 'introduction',    title: 'Introduction',    slug: '/' },
+    { id: 'getting-started', title: 'Getting Started', slug: '/getting-started' },
+    { id: 'installation',    title: 'Installation',    slug: '/installation' },
+    { id: 'products',        title: 'Products',        slug: '/products' },
+    { id: 'features',        title: 'Features',        slug: '/features' },
+    { id: 'api',             title: 'API Reference',   slug: '/api' },
+    { id: 'configuration',   title: 'Configuration',   slug: '/configuration' },
+    { id: 'integrations',    title: 'Integrations',    slug: '/integrations' },
+    { id: 'enterprise',      title: 'Enterprise',      slug: '/enterprise' },
+    { id: 'contributing',    title: 'Contributing',    slug: '/contributing' },
+    { id: 'changelog',       title: 'Changelog',       slug: '/changelog' },
+  ],
+  deploy: [
+    { id: 'deploy-overview',     title: 'Overview',       slug: '/deploy' },
+    { id: 'deploy-architecture', title: 'Architecture',   slug: '/deploy/architecture' },
+    { id: 'deploy-components',   title: 'Components',     slug: '/deploy/components' },
+    { id: 'environments',        title: 'Environments',   slug: '/deploy/environments' },
+    { id: 'release-and-deploy',  title: 'Release & Deploy', slug: '/deploy/release' },
+    { id: 'secrets-and-ops',     title: 'Secrets & Ops',  slug: '/deploy/secrets' },
+    { id: 'deploy-testing',      title: 'Testing',        slug: '/deploy/testing' },
+    { id: 'cicd-reference',      title: 'CI/CD Reference', slug: '/deploy/cicd' },
+    { id: 'deploy-dev-guide',    title: 'Dev Guide',      slug: '/deploy/dev-guide' },
+  ],
+};
+
+// Flat list of all tabs (used for lookups)
+export const topTabs: TopTab[] = Object.values(tabsByRepo).flat();
 
 export const navigationByTab: Record<string, NavItem[]> = {
   introduction: [
