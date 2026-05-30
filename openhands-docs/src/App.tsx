@@ -3,18 +3,35 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ContentArea from './components/ContentArea';
 import CodePanel from './components/CodePanel';
-import { topTabs, navigationByTab } from './data/navigation';
+import { repos, tabsByRepo, navigationByTab } from './data/navigation';
 import { getPage } from './data/pages';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('introduction');
-  const [activePage, setActivePage] = useState('/');
+  const [activeRepo, setActiveRepo]   = useState('openhands');
+  const [activeTab, setActiveTab]     = useState('introduction');
+  const [activePage, setActivePage]   = useState('/');
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  const handleRepoChange = useCallback((repoId: string) => {
+    const repo = repos.find(r => r.id === repoId);
+    if (!repo) return;
+    setActiveRepo(repoId);
+    const firstTab = tabsByRepo[repoId]?.[0];
+    const tabId = firstTab?.id ?? repo.defaultTab;
+    setActiveTab(tabId);
+    const navItems = navigationByTab[tabId];
+    if (navItems && navItems.length > 0) {
+      setActivePage(navItems[0].route);
+    } else if (firstTab) {
+      setActivePage(firstTab.slug);
+    }
+  }, []);
+
   const handleTabChange = useCallback((tabId: string) => {
     setActiveTab(tabId);
-    const tab = topTabs.find(t => t.id === tabId);
+    const allTabs = Object.values(tabsByRepo).flat();
+    const tab = allTabs.find(t => t.id === tabId);
     if (tab) {
       const navItems = navigationByTab[tabId];
       if (navItems && navItems.length > 0) {
@@ -30,13 +47,15 @@ export default function App() {
     setMobileSidebarOpen(false);
   }, []);
 
-  const navItems = navigationByTab[activeTab] || [];
+  const navItems   = navigationByTab[activeTab] || [];
   const currentPage = getPage(activePage);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)' }}>
       <Header
+        activeRepo={activeRepo}
         activeTab={activeTab}
+        onRepoChange={handleRepoChange}
         onTabChange={handleTabChange}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
