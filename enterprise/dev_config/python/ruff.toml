@@ -1,5 +1,6 @@
 [lint]
 select = [
+    "ASYNC",
     "E",
     "W",
     "F",
@@ -17,6 +18,13 @@ ignore = [
     "B010",
     "B904",
     "B018",
+    # Ignore async rules that may have false positives or are informational
+    "ASYNC109",  # `yield from` in async function
+    "ASYNC110",  # `await` outside async context
+    "ASYNC220",  # bare `yield` in async function
+    "ASYNC221",  # `yield` with `await` in async function
+    "ASYNC230",  # `return` in async function returning non-Awaitable
+    "ASYNC251",  # `await` in bare `yield` outside async gen
 ]
 
 exclude = [
