@@ -30,7 +30,7 @@ export const useUnifiedResumeConversationSandbox = () => {
   );
 
   return useMutation({
-    mutationKey: ["start-conversation"],
+    mutationKey: ["unified-resume-conversation-sandbox"],
     mutationFn: async (variables: {
       conversationId: string;
       providers?: Provider[];
