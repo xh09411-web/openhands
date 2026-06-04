@@ -192,11 +192,25 @@ def _jira_dc_events_url(workspace_id: int) -> str:
     return f'https://{WEB_HOST}/integration/jira-dc/connections/{workspace_id}/events'
 
 
+def _configured_jira_dc_workspace_name() -> str | None:
+    if not JIRA_DC_ENABLE_OAUTH:
+        return None
+    return urlparse(JIRA_DC_BASE_URL).hostname
+
+
+def _workspace_matches_configured_jira_dc_host(workspace_name: str) -> bool:
+    configured_workspace = _configured_jira_dc_workspace_name()
+    if not configured_workspace:
+        return True
+    return workspace_name.lower() == configured_workspace.lower()
+
+
 async def _handle_workspace_link_creation(
     user_id: str,
     jira_dc_user_id: str,
     target_workspace: str,
     require_active_workspace: bool = True,
+    replace_stale_active_link: bool = False,
 ):
     """Handle the creation or reactivation of a workspace link for a user."""
     # Verify workspace exists and is active
@@ -213,6 +227,11 @@ async def _handle_workspace_link_creation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Workspace "{target_workspace}" is not active',
+        )
+
+    if replace_stale_active_link:
+        await jira_dc_manager.integration_store.deactivate_user_links_except_workspace(
+            user_id, workspace.id
         )
 
     # Check if user currently has an active workspace link
@@ -877,7 +896,10 @@ async def jira_dc_callback(request: Request, code: str, state: str):
             # Create a workspace link for the user (admin automatically gets linked)
             if integration_session['is_active']:
                 await _handle_workspace_link_creation(
-                    user_id, jira_dc_user_id, target_workspace
+                    user_id,
+                    jira_dc_user_id,
+                    target_workspace,
+                    replace_stale_active_link=True,
                 )
             else:
                 await _handle_workspace_link_creation(
@@ -885,6 +907,7 @@ async def jira_dc_callback(request: Request, code: str, state: str):
                     jira_dc_user_id,
                     target_workspace,
                     require_active_workspace=False,
+                    replace_stale_active_link=True,
                 )
         else:
             # Workspace exists - validate user can update it
@@ -912,7 +935,10 @@ async def jira_dc_callback(request: Request, code: str, state: str):
 
             if integration_session['is_active']:
                 await _handle_workspace_link_creation(
-                    user_id, jira_dc_user_id, target_workspace
+                    user_id,
+                    jira_dc_user_id,
+                    target_workspace,
+                    replace_stale_active_link=True,
                 )
             else:
                 await _handle_workspace_link_creation(
@@ -920,6 +946,7 @@ async def jira_dc_callback(request: Request, code: str, state: str):
                     jira_dc_user_id,
                     target_workspace,
                     require_active_workspace=False,
+                    replace_stale_active_link=True,
                 )
 
         webhook_enrolled = await _maybe_register_webhook(
@@ -957,7 +984,10 @@ async def jira_dc_callback(request: Request, code: str, state: str):
         )
     elif integration_session.get('operation_type') == 'workspace_link':
         await _handle_workspace_link_creation(
-            user_id, jira_dc_user_id, target_workspace
+            user_id,
+            jira_dc_user_id,
+            target_workspace,
+            replace_stale_active_link=True,
         )
 
         workspace = await jira_dc_manager.integration_store.get_workspace_by_name(
@@ -1014,6 +1044,11 @@ async def get_current_workspace_link(request: Request):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail='Workspace not found for the user',
+            )
+        if not _workspace_matches_configured_jira_dc_host(workspace.name):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='User is not registered for the configured Jira DC integration',
             )
 
         return JiraDcUserResponse(

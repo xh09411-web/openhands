@@ -207,6 +207,31 @@ class JiraDcIntegrationStore:
             logger.info(f'[Jira DC] Updated user {keycloak_user_id} status to {status}')
             return user
 
+    async def deactivate_user_links_except_workspace(
+        self, keycloak_user_id: str, jira_dc_workspace_id: int
+    ) -> int:
+        """Deactivate active Jira DC links for this user except the target workspace."""
+        async with a_session_maker() as session:
+            result = await session.execute(
+                update(JiraDcUser)
+                .where(
+                    JiraDcUser.keycloak_user_id == keycloak_user_id,
+                    JiraDcUser.jira_dc_workspace_id != jira_dc_workspace_id,
+                    JiraDcUser.status == 'active',
+                )
+                .values(status='inactive')
+            )
+            await session.commit()
+
+        deactivated_count = result.rowcount or 0
+        if deactivated_count:
+            logger.info(
+                '[Jira DC] Deactivated %s stale active user links for user %s',
+                deactivated_count,
+                keycloak_user_id,
+            )
+        return deactivated_count
+
     async def deactivate_workspace(self, workspace_id: int):
         """Deactivate the workspace and all user links for a given workspace."""
         async with a_session_maker() as session:
