@@ -132,5 +132,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def is_rate_limited_request(self, request: StarletteRequest) -> bool:
         if request.url.path.startswith('/assets'):
             return False
+        if self.is_sandbox_resume_request(request):
+            return False
         # Put Other non rate limited checks here
         return True
+
+    def is_sandbox_resume_request(self, request: StarletteRequest) -> bool:
+        path = request.url.path.rstrip('/')
+        return (
+            request.method == 'POST'
+            and path.startswith('/api/v1/sandboxes/')
+            and path.endswith('/resume')
+        )
