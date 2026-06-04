@@ -11,27 +11,21 @@ from uuid import UUID
 import base62
 import httpx
 from fastapi import Request
-from pydantic import Field
-from sqlalchemy import String, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column
-
 from openhands.agent_server.models import (
     ConversationInfo,
     EventPage,
 )
 from openhands.agent_server.utils import utc_now
-from openhands.app_server.app_conversation.app_conversation_info_service import (
-    AppConversationInfoService,
-)
+from openhands.sdk.utils.paging import page_iterator
+from pydantic import Field
+from sqlalchemy import String, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column
+
 from openhands.app_server.app_conversation.app_conversation_models import (
     AppConversationInfo,
 )
 from openhands.app_server.errors import SandboxError
-from openhands.app_server.event.event_service import EventService
-from openhands.app_server.event_callback.event_callback_service import (
-    EventCallbackService,
-)
 from openhands.app_server.sandbox.sandbox_models import (
     AGENT_SERVER,
     VSCODE,
@@ -54,7 +48,6 @@ from openhands.app_server.services.injector import InjectorState
 from openhands.app_server.user.specifiy_user_context import ADMIN, USER_CONTEXT_ATTR
 from openhands.app_server.user.user_context import UserContext
 from openhands.app_server.utils.sql_utils import Base, UtcDateTime
-from openhands.sdk.utils.paging import page_iterator
 
 _logger = logging.getLogger(__name__)
 polling_task: asyncio.Task | None = None
@@ -726,8 +719,6 @@ async def poll_agent_servers(api_url: str, api_key: str, sleep_interval: int):
     from openhands.app_server.config import (
         get_app_conversation_info_service,
         get_db_session,
-        get_event_callback_service,
-        get_event_service,
         get_httpx_client,
     )
 
@@ -857,10 +848,8 @@ async def refresh_conversation(
         # Phase 2: Write - acquire DB session and save conversation info
         # (short-lived session, no network I/O held)
         async with (
-            get_db_session(state) as db_session,
-            get_app_conversation_info_service(
-                state
-            ) as app_conversation_info_service,
+            get_db_session(state) as _db_session,
+            get_app_conversation_info_service(state) as app_conversation_info_service,
         ):
             await app_conversation_info_service.save_app_conversation_info(
                 app_conversation_info
@@ -890,7 +879,7 @@ async def refresh_conversation(
             # Phase 4: Write - acquire DB session for each event save
             # (short-lived session per event, no network I/O held)
             async with (
-                get_db_session(state) as db_session,
+                get_db_session(state) as _db_session,
                 get_event_service(state) as event_service,
                 get_event_callback_service(state) as event_callback_service,
             ):
