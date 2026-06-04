@@ -11,6 +11,7 @@ This module tests the RemoteSandboxService implementation, focusing on:
 - Error handling for HTTP failures and edge cases
 """
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1279,7 +1280,8 @@ class TestPollAgentServersSessionScoping:
     @pytest.mark.asyncio
     async def test_poll_agent_servers_releases_db_before_network_io(self):
         """Test that poll_agent_servers releases DB session before network calls."""
-        from unittest.mock import AsyncMock, MagicMock, patch, call
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         from openhands.app_server.sandbox.remote_sandbox_service import (
             poll_agent_servers,
         )
@@ -1378,13 +1380,13 @@ class TestPollAgentServersSessionScoping:
         mock_httpx_client.get.side_effect = slow_get
 
         # Patch config functions
-        with patch(
-            'openhands.app_server.config.get_app_conversation_info_service'
-        ) as mock_get_conv_svc, patch(
-            'openhands.app_server.config.get_db_session'
-        ) as mock_get_db, patch(
-            'openhands.app_server.config.get_httpx_client'
-        ) as mock_get_httpx:
+        with (
+            patch(
+                'openhands.app_server.config.get_app_conversation_info_service'
+            ) as mock_get_conv_svc,
+            patch('openhands.app_server.config.get_db_session') as mock_get_db,
+            patch('openhands.app_server.config.get_httpx_client') as mock_get_httpx,
+        ):
             # Setup mocks to return context managers
             async def mock_conv_service_cm(*args, **kwargs):
                 class CM:
@@ -1408,11 +1410,12 @@ class TestPollAgentServersSessionScoping:
                 'openhands.app_server.sandbox.remote_sandbox_service.InjectorState'
             ):
                 # Mock USER_CONTEXT_ATTR
-                with patch(
-                    'openhands.app_server.sandbox.remote_sandbox_service.ADMIN'
-                ), patch(
-                    'openhands.app_server.sandbox.remote_sandbox_service.USER_CONTEXT_ATTR',
-                    'user_context',
+                with (
+                    patch('openhands.app_server.sandbox.remote_sandbox_service.ADMIN'),
+                    patch(
+                        'openhands.app_server.sandbox.remote_sandbox_service.USER_CONTEXT_ATTR',
+                        'user_context',
+                    ),
                 ):
                     # Run poll_agent_servers with timeout to prevent infinite loop
                     import asyncio
@@ -1451,7 +1454,7 @@ class TestPollAgentServersSessionScoping:
         model validation. The key verification is that if DB operations are
         attempted, the function will use its own short-lived sessions.
         """
-        from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+        from unittest.mock import AsyncMock, MagicMock, patch
         from uuid import uuid4
 
         from openhands.app_server.sandbox.remote_sandbox_service import (
@@ -1499,15 +1502,16 @@ class TestPollAgentServersSessionScoping:
                 pass
 
         # Patch config functions
-        with patch(
-            'openhands.app_server.config.get_db_session'
-        ) as mock_get_db, patch(
-            'openhands.app_server.config.get_app_conversation_info_service'
-        ) as mock_get_conv, patch(
-            'openhands.app_server.config.get_event_service'
-        ) as mock_get_event, patch(
-            'openhands.app_server.config.get_event_callback_service'
-        ) as mock_get_callback:
+        with (
+            patch('openhands.app_server.config.get_db_session') as mock_get_db,
+            patch(
+                'openhands.app_server.config.get_app_conversation_info_service'
+            ) as mock_get_conv,
+            patch('openhands.app_server.config.get_event_service') as mock_get_event,
+            patch(
+                'openhands.app_server.config.get_event_callback_service'
+            ) as mock_get_callback,
+        ):
             # Setup mocks to return context managers
             def get_db_session_mock(*args):
                 count = len(db_sessions_acquired)
@@ -1524,13 +1528,15 @@ class TestPollAgentServersSessionScoping:
             mock_get_callback.return_value = mock_callback_service_cm_obj
 
             # Mock InjectorState
-            with patch(
-                'openhands.app_server.sandbox.remote_sandbox_service.InjectorState'
-            ), patch(
-                'openhands.app_server.sandbox.remote_sandbox_service.ADMIN'
-            ), patch(
-                'openhands.app_server.sandbox.remote_sandbox_service.USER_CONTEXT_ATTR',
-                'user_context',
+            with (
+                patch(
+                    'openhands.app_server.sandbox.remote_sandbox_service.InjectorState'
+                ),
+                patch('openhands.app_server.sandbox.remote_sandbox_service.ADMIN'),
+                patch(
+                    'openhands.app_server.sandbox.remote_sandbox_service.USER_CONTEXT_ATTR',
+                    'user_context',
+                ),
             ):
                 app_conversation_info = MagicMock()
                 mock_id = MagicMock()
@@ -1569,7 +1575,7 @@ class TestPollAgentServersSessionScoping:
 
         This is the key regression test for the 'idle in transaction' fix.
         """
-        from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+        from unittest.mock import AsyncMock, MagicMock, patch
         from uuid import uuid4
 
         from openhands.app_server.sandbox.remote_sandbox_service import (
@@ -1592,6 +1598,17 @@ class TestPollAgentServersSessionScoping:
                 self.is_active = False
 
         tracked_session = TrackedDbSession()
+
+        # Mock db_session context manager for fallback
+        class MockDbSession:
+            def __init__(self, name):
+                self.name = name
+
+            async def __aenter__(self):
+                return MagicMock()
+
+            async def __aexit__(self, *args):
+                pass
 
         conv_id = str(uuid4())
         conv_id_hex = conv_id.replace('-', '')
@@ -1629,11 +1646,12 @@ class TestPollAgentServersSessionScoping:
         mock_conv_service.save_app_conversation_info = AsyncMock()
 
         # Patch config
-        with patch(
-            'openhands.app_server.config.get_db_session'
-        ) as mock_get_db, patch(
-            'openhands.app_server.config.get_app_conversation_info_service'
-        ) as mock_get_conv:
+        with (
+            patch('openhands.app_server.config.get_db_session') as mock_get_db,
+            patch(
+                'openhands.app_server.config.get_app_conversation_info_service'
+            ) as mock_get_conv,
+        ):
             # Return tracked session on first call (for save), regular session on second
             session_calls = [0]
 
@@ -1657,13 +1675,15 @@ class TestPollAgentServersSessionScoping:
             mock_get_conv.return_value = mock_conv_cm()
 
             # Mock InjectorState
-            with patch(
-                'openhands.app_server.sandbox.remote_sandbox_service.InjectorState'
-            ), patch(
-                'openhands.app_server.sandbox.remote_sandbox_service.ADMIN'
-            ), patch(
-                'openhands.app_server.sandbox.remote_sandbox_service.USER_CONTEXT_ATTR',
-                'user_context',
+            with (
+                patch(
+                    'openhands.app_server.sandbox.remote_sandbox_service.InjectorState'
+                ),
+                patch('openhands.app_server.sandbox.remote_sandbox_service.ADMIN'),
+                patch(
+                    'openhands.app_server.sandbox.remote_sandbox_service.USER_CONTEXT_ATTR',
+                    'user_context',
+                ),
             ):
                 app_conversation_info = MagicMock()
                 # Create a mock ID that has a hex property
