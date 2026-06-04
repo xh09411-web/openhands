@@ -194,6 +194,7 @@ def _jira_dc_events_url(workspace_id: int) -> str:
 
 def _configured_jira_dc_workspace_name() -> str | None:
     if not JIRA_DC_ENABLE_OAUTH:
+        # Legacy email-match mode is not pinned to the KOTS-configured OAuth host.
         return None
     return urlparse(JIRA_DC_BASE_URL).hostname
 
