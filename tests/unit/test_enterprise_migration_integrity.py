@@ -243,7 +243,9 @@ def test_revision_must_be_string(versions_dir: Path):
 
     errors = module.check_migration_integrity(versions_dir)
 
-    assert any('001_create_users.py: revision must be a string' in error for error in errors)
+    assert any(
+        '001_create_users.py: revision must be a string' in error for error in errors
+    )
 
 
 def test_invalid_down_revision_type_fails(versions_dir: Path):
@@ -278,7 +280,6 @@ def test_invalid_down_revision_type_fails(versions_dir: Path):
     errors = module.check_migration_integrity(versions_dir)
 
     assert any(
-        "down_revision must be None, a string, or a sequence of strings"
-        in error
+        'down_revision must be None, a string, or a sequence of strings' in error
         for error in errors
     )
