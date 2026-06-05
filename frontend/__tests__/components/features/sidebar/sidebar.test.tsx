@@ -188,7 +188,7 @@ describe("Sidebar", () => {
   });
 
   describe("Automations button visibility", () => {
-    it("should show automations button when enable_automations flag is true", async () => {
+    it("should show automations button when feature_flags.enable_automations is true", async () => {
       getConfigSpy.mockResolvedValue(
         createMockConfig({ feature_flags: { enable_automations: true } }),
       );
@@ -202,7 +202,7 @@ describe("Sidebar", () => {
       });
     });
 
-    it("should hide automations button when enable_automations flag is false", async () => {
+    it("should hide automations button when feature_flags.enable_automations is false", async () => {
       getConfigSpy.mockResolvedValue(
         createMockConfig({ feature_flags: { enable_automations: false } }),
       );
