@@ -235,3 +235,41 @@ def test_revision_must_be_string(versions_dir: Path):
     errors = module.check_migration_integrity(versions_dir)
 
     assert any('001_create_users.py: revision must be a string' in error for error in errors)
+
+
+def test_invalid_down_revision_type_fails(versions_dir: Path):
+    module = load_module()
+    write_migration(
+        versions_dir,
+        '001_create_users.py',
+        revision='001',
+        down_revision=None,
+    )
+    # Write a migration with an invalid down_revision type (integer instead of string)
+    (versions_dir / '002_add_user_email.py').write_text(
+        '\n'.join(
+            [
+                '"""Test migration."""',
+                '',
+                "revision = '002'",
+                'down_revision = 123',  # invalid type: must be None, string, or sequence
+                'branch_labels = None',
+                'depends_on = None',
+                '',
+                'def upgrade():',
+                '    pass',
+                '',
+                'def downgrade():',
+                '    pass',
+                '',
+            ]
+        )
+    )
+
+    errors = module.check_migration_integrity(versions_dir)
+
+    assert any(
+        "down_revision must be None, a string, or a sequence of strings"
+        in error
+        for error in errors
+    )
