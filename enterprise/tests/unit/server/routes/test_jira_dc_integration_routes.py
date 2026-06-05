@@ -5,7 +5,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
-import httpx
 import pytest
 from fastapi import HTTPException, Request, status
 from fastapi.responses import RedirectResponse
@@ -59,6 +58,7 @@ def create_httpx_mock(post_response=None, get_response=None, get_responses=None)
 
     # Set up conditional GET responses if provided
     if get_responses:
+
         async def mock_get(url, **kwargs):
             for pattern, resp in get_responses.items():
                 if pattern in url:
@@ -296,7 +296,10 @@ async def test_jira_dc_callback_workspace_integration_new_workspace(
     mock_manager.integration_store.create_workspace.return_value = mock_workspace
 
     with patch('server.routes.integration.jira_dc.token_manager') as mock_token_manager:
-        with patch('server.routes.integration.jira_dc.JIRA_DC_BASE_URL', 'https://test.atlassian.net'):
+        with patch(
+            'server.routes.integration.jira_dc.JIRA_DC_BASE_URL',
+            'https://test.atlassian.net',
+        ):
             with patch('httpx.AsyncClient', return_value=httpx_mock):
                 mock_token_manager.encrypt_text.side_effect = lambda x: f'enc_{x}'
                 response = await jira_dc_callback(mock_request, code, state)
@@ -353,7 +356,10 @@ async def test_jira_dc_callback_redirects_with_webhook_install_failure(
     mock_register_webhook.return_value = False
 
     with patch('server.routes.integration.jira_dc.token_manager') as mock_token_manager:
-        with patch('server.routes.integration.jira_dc.JIRA_DC_BASE_URL', 'https://test.atlassian.net'):
+        with patch(
+            'server.routes.integration.jira_dc.JIRA_DC_BASE_URL',
+            'https://test.atlassian.net',
+        ):
             with patch('httpx.AsyncClient', return_value=httpx_mock):
                 mock_token_manager.encrypt_text.side_effect = lambda x: f'enc_{x}'
                 response = await jira_dc_callback(mock_request, 'code', state)
@@ -423,7 +429,10 @@ async def test_jira_dc_callback_token_exchange_uses_form_encoding(
     mock_httpx.__aexit__ = AsyncMock(return_value=None)
 
     with patch('server.routes.integration.jira_dc.token_manager') as mock_token_manager:
-        with patch('server.routes.integration.jira_dc.JIRA_DC_BASE_URL', 'https://test.atlassian.net'):
+        with patch(
+            'server.routes.integration.jira_dc.JIRA_DC_BASE_URL',
+            'https://test.atlassian.net',
+        ):
             with patch('httpx.AsyncClient', return_value=mock_httpx):
                 mock_token_manager.encrypt_text.side_effect = lambda x: f'enc_{x}'
 
@@ -1327,7 +1336,10 @@ async def test_jira_dc_callback_unauthorized_workspace(mock_redis, mock_request)
     mock_httpx.__aenter__ = AsyncMock(return_value=mock_client)
     mock_httpx.__aexit__ = AsyncMock(return_value=None)
 
-    with patch('server.routes.integration.jira_dc.JIRA_DC_BASE_URL', 'https://target.atlassian.net'):
+    with patch(
+        'server.routes.integration.jira_dc.JIRA_DC_BASE_URL',
+        'https://target.atlassian.net',
+    ):
         with patch('httpx.AsyncClient', return_value=mock_httpx):
             with pytest.raises(HTTPException) as exc_info:
                 await jira_dc_callback(mock_request, 'code', 'test_state')
@@ -1373,9 +1385,14 @@ async def test_jira_dc_callback_workspace_integration_existing_workspace(
     mock_manager.integration_store.update_workspace.return_value = mock_workspace
 
     with patch('server.routes.integration.jira_dc.token_manager') as mock_token_manager:
-        with patch('server.routes.integration.jira_dc.JIRA_DC_BASE_URL', 'https://existing.atlassian.net'):
+        with patch(
+            'server.routes.integration.jira_dc.JIRA_DC_BASE_URL',
+            'https://existing.atlassian.net',
+        ):
             with patch('httpx.AsyncClient', return_value=httpx_mock):
-                with patch('server.routes.integration.jira_dc._validate_workspace_update_permissions') as mock_validate:
+                with patch(
+                    'server.routes.integration.jira_dc._validate_workspace_update_permissions'
+                ) as mock_validate:
                     mock_validate.return_value = mock_workspace
                     mock_token_manager.encrypt_text.side_effect = lambda x: f'enc_{x}'
 
@@ -1409,7 +1426,10 @@ async def test_jira_dc_callback_invalid_operation_type(mock_redis, mock_request)
         },
     )
 
-    with patch('server.routes.integration.jira_dc.JIRA_DC_BASE_URL', 'https://test.atlassian.net'):
+    with patch(
+        'server.routes.integration.jira_dc.JIRA_DC_BASE_URL',
+        'https://test.atlassian.net',
+    ):
         with patch('httpx.AsyncClient', return_value=httpx_mock):
             with pytest.raises(HTTPException) as exc_info:
                 await jira_dc_callback(mock_request, 'code', 'test_state')

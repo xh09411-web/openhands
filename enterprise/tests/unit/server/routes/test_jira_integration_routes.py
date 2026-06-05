@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 from fastapi import HTTPException, Request, status
 from fastapi.responses import RedirectResponse
@@ -59,6 +58,7 @@ def create_httpx_mock(post_response=None, get_response=None, get_responses=None)
 
     # Set up conditional GET responses if provided
     if get_responses:
+
         async def mock_get(url, **kwargs):
             for pattern, resp in get_responses.items():
                 if pattern in url:
@@ -908,7 +908,9 @@ async def test_jira_callback_workspace_integration_existing_workspace(
 
     with patch('server.routes.integration.jira.token_manager') as mock_token_manager:
         with patch('httpx.AsyncClient', return_value=httpx_mock):
-            with patch('server.routes.integration.jira._validate_workspace_update_permissions') as mock_validate:
+            with patch(
+                'server.routes.integration.jira._validate_workspace_update_permissions'
+            ) as mock_validate:
                 mock_validate.return_value = mock_workspace
                 mock_token_manager.encrypt_text.side_effect = lambda x: f'enc_{x}'
 
