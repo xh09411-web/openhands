@@ -6,11 +6,9 @@ name: Enterprise Apply Migrations on Test DB
 # merge/deploy instead of in the staging migrate-db init container — e.g. a
 # CREATE INDEX CONCURRENTLY in an autocommit_block, which crashes under env.py.
 #
-# This workflow runs when:
-# 1. Migration files or alembic.ini are modified (path-filter match) - runs apply-migrations.
-# 2. Check script or check workflow is modified (path-filter match) - only runs check-migrations.
-#
-# The workflow_run trigger is deprecated because it runs on base branch, not PR branch.
+# This workflow runs when migration-related files are modified (path-filter match).
+# It checks if migration files are actually present in the changes, and only
+# runs the apply-migrations job if migrations are present.
 
 on:
   pull_request:
@@ -21,21 +19,10 @@ on:
       - '.github/workflows/enterprise-check-migrations.yml'
       - '.github/workflows/enterprise-apply-migrations-test-db.yml'
 
-  # DEPRECATED: workflow_run runs on base branch, not PR branch, so it can't test
-  # migration changes in the PR. Use the pull_request trigger instead which correctly
-  # checks out the PR branch.
-  workflow_run:
-    workflows: ["Enterprise Check Migrations"]
-    types: [completed]
-    branches: ['*']
-
 # Group is per-PR-branch, so this only cancels a superseded run of the SAME PR
 # (e.g. after a new push) — never another PR. cancel-in-progress is safe here
 # because each run uses its own throwaway Postgres service that is destroyed with
 # the runner: cancelling mid-migration leaves no shared/persistent state behind.
-#
-# Note: workflow_run triggered runs use the base branch as head_ref, so they get
-# their own concurrency group and won't be cancelled by pull_request runs.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
