@@ -95,6 +95,7 @@ class SlackMessageView:
         )
 
 
+@dataclass
 class SlackViewInterface(SlackMessageView, SummaryExtractionTracker, ABC):
     """Interface for authenticated Slack views that can create conversations.
 

@@ -21,7 +21,7 @@ class SaaSGitHubService(GitHubService):
         base_domain: str | None = None,
     ):
         logger.debug(
-            f'SaaSGitHubService created with user_id {user_id}, external_auth_id {external_auth_id}, external_auth_token {'set' if external_auth_token else 'None'}, github_token {'set' if token else 'None'}, external_token_manager {external_token_manager}'
+            f'SaaSGitHubService created with user_id {user_id}, external_auth_id {external_auth_id}, external_auth_token {"set" if external_auth_token else "None"}, github_token {"set" if token else "None"}, external_token_manager {external_token_manager}'
         )
         super().__init__(
             user_id=user_id,
@@ -146,13 +146,20 @@ class SaaSGitHubService(GitHubService):
                 )
         return None
 
-    async def get_paginated_repos(self, page, per_page, sort, installation_id):
+    async def get_paginated_repos(
+        self,
+        page: int,
+        per_page: int,
+        sort: str,
+        installation_id: str | None,
+        query: str | None = None,
+    ) -> list[Repository]:
         repositories = await super().get_paginated_repos(
-            page, per_page, sort, installation_id
+            page, per_page, sort, installation_id, query
         )
         external_auth_id = await self._get_external_auth_id()
         if external_auth_id:
-            asyncio.create_task(
+            _ = asyncio.create_task(
                 store_repositories_in_db(repositories, external_auth_id)
             )
         return repositories
@@ -164,7 +171,7 @@ class SaaSGitHubService(GitHubService):
         # Schedule the background task without awaiting it
         external_auth_id = await self._get_external_auth_id()
         if external_auth_id:
-            asyncio.create_task(
+            _ = asyncio.create_task(
                 store_repositories_in_db(repositories, external_auth_id)
             )
         # Return repositories immediately

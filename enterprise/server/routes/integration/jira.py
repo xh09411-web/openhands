@@ -7,7 +7,7 @@ import uuid
 from typing import cast
 from urllib.parse import urlencode, urlparse
 
-import requests
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from integrations.jira.jira_manager import JiraManager
@@ -480,7 +480,8 @@ async def jira_callback(request: Request, code: str, state: str):
         'code': code,
         'redirect_uri': JIRA_REDIRECT_URI,
     }
-    response = requests.post(JIRA_TOKEN_URL, json=token_payload)
+    async with httpx.AsyncClient() as client:
+        response = await client.post(JIRA_TOKEN_URL, json=token_payload)
     if response.status_code != 200:
         raise HTTPException(
             status_code=400, detail=f'Error fetching token: {response.text}'
@@ -490,7 +491,8 @@ async def jira_callback(request: Request, code: str, state: str):
     access_token = token_data['access_token']
 
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = requests.get(JIRA_RESOURCES_URL, headers=headers)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(JIRA_RESOURCES_URL, headers=headers)
 
     if response.status_code != 200:
         raise HTTPException(
@@ -520,7 +522,8 @@ async def jira_callback(request: Request, code: str, state: str):
 
     jira_cloud_id = target_workspace_data.get('id', '')
 
-    jira_user_response = requests.get(JIRA_USER_INFO_URL, headers=headers)
+    async with httpx.AsyncClient() as client:
+        jira_user_response = await client.get(JIRA_USER_INFO_URL, headers=headers)
     if jira_user_response.status_code != 200:
         raise HTTPException(
             status_code=400,
