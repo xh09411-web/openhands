@@ -7,8 +7,8 @@ name: Enterprise Apply Migrations on Test DB
 # CREATE INDEX CONCURRENTLY in an autocommit_block, which crashes under env.py.
 #
 # This workflow runs when migration-related files are modified (path-filter match).
-# It checks if migration files are actually present in the changes, and only
-# runs the apply-migrations job if migrations are present.
+# The static integrity check is handled by enterprise-check-migrations.yml, so this
+# workflow only runs the runtime apply-migrations job.
 
 on:
   pull_request:
@@ -28,35 +28,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-migrations:
-    name: Check if migrations present
-    runs-on: ubuntu-latest
-    outputs:
-      has_migrations: ${{ steps.check.outputs.has_migrations }}
-    steps:
-      - name: Checkout PR branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - name: Check for migration file changes
-        id: check
-        run: |
-          # Check if any migration files or alembic.ini are modified
-          CHANGES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -cE '^(enterprise/migrations/|enterprise/alembic.ini)' || echo "0")
-          if [ "$CHANGES" -gt 0 ]; then
-            echo "has_migrations=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_migrations=false" >> $GITHUB_OUTPUT
-          fi
-
   apply-migrations:
     name: Apply migrations on test DB
     runs-on: ubuntu-24.04
-    needs: check-migrations
-    # Only run when check-migrations outputs has_migrations=true
-    if: needs.check-migrations.outputs.has_migrations == 'true'
     strategy:
       matrix:
         # Test both the production driver (pg8000) and the psycopg2 fallback.
