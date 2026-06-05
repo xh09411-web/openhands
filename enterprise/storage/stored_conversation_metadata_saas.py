@@ -28,9 +28,7 @@ class StoredConversationMetadataSaas(Base):
         #   (user_id, org_id): conversation listing filters by user_id and
         #     optionally org_id; the prefix also serves user_id-only deletes.
         #   (org_id): org-admin paths select/delete by org_id alone.
-        Index(
-            'ix_conversation_metadata_saas_user_id_org_id', 'user_id', 'org_id'
-        ),
+        Index('ix_conversation_metadata_saas_user_id_org_id', 'user_id', 'org_id'),
         Index('ix_conversation_metadata_saas_org_id', 'org_id'),
     )
 
