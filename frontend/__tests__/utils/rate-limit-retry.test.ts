@@ -51,4 +51,26 @@ describe("rate limit retry helpers", () => {
   it("falls back to one second when Retry-After is missing", () => {
     expect(getRateLimitRetryDelayMs(createAxiosError(429))).toBe(1000);
   });
+
+  it("falls back to one second for non-numeric Retry-After", () => {
+    expect(
+      getRateLimitRetryDelayMs(
+        createAxiosError(429, { "retry-after": "invalid" }),
+      ),
+    ).toBe(1000);
+  });
+
+  it("treats negative Retry-After seconds as immediate retry (already expired)", () => {
+    // Date.parse("-5") returns a valid timestamp (epoch - 5000ms), and since
+    // that time has passed, Math.max(negative - now, 0) returns 0
+    expect(
+      getRateLimitRetryDelayMs(createAxiosError(429, { "retry-after": "-5" })),
+    ).toBe(0);
+  });
+
+  it("treats zero Retry-After seconds as immediate (0ms delay)", () => {
+    expect(
+      getRateLimitRetryDelayMs(createAxiosError(429, { "retry-after": "0" })),
+    ).toBe(0);
+  });
 });

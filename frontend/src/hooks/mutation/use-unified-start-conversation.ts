@@ -30,6 +30,8 @@ export const useUnifiedResumeConversationSandbox = () => {
   );
 
   return useMutation({
+    // Mutation keys don't affect data cache - they only track mutation state.
+    // This key is intentionally descriptive to distinguish from any legacy mutations.
     mutationKey: ["unified-resume-conversation-sandbox"],
     mutationFn: async (variables: {
       conversationId: string;
