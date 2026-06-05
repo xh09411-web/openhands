@@ -6,9 +6,10 @@ name: Enterprise Apply Migrations on Test DB
 # merge/deploy instead of in the staging migrate-db init container — e.g. a
 # CREATE INDEX CONCURRENTLY in an autocommit_block, which crashes under env.py.
 #
-# This workflow is gated on the Enterprise Check Migrations workflow completing
-# successfully. The gating ensures static checks (migration integrity, up-to-date)
-# pass before running the expensive apply-migrations tests.
+# This workflow runs in two scenarios:
+# 1. Directly on pull_request when migration files are modified (path-filter match).
+# 2. After Enterprise Check Migrations completes successfully (workflow_run trigger),
+#    providing a gating layer that ensures static checks pass first.
 
 on:
   pull_request:
