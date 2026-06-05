@@ -63,7 +63,9 @@ async def get_user_jira_dc_token(
 
     fresh = access_exp == 0 or access_exp > now + _ACCESS_REFRESH_BUFFER_SECONDS
     if fresh:
-        return JiraDcUserToken(SecretStr(token_manager.decrypt_text(enc_access)), access_exp)
+        return JiraDcUserToken(
+            SecretStr(token_manager.decrypt_text(enc_access)), access_exp
+        )
 
     if not enc_refresh:
         raise JiraDcUserTokenError(
