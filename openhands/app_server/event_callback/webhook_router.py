@@ -14,6 +14,10 @@ from pydantic import SecretStr
 from openhands import tools  # type: ignore[attr-defined]
 from openhands.agent_server.models import ConversationInfo, Success
 from openhands.analytics import get_analytics_service, resolve_analytics_context
+from openhands.app_server.app_conversation.acp_session_snapshot_service import (
+    AcpSessionSnapshotService,
+    supports_native_session_resume,
+)
 from openhands.app_server.app_conversation.app_conversation_info_service import (
     AppConversationInfoService,
 )
@@ -180,6 +184,117 @@ async def _track_conversation_terminal(
         trigger=app_conversation_info.trigger.value
         if app_conversation_info.trigger
         else None,
+    )
+
+
+# Execution statuses that mark an ACP turn boundary — the quiescent points
+# where the CLI has flushed its session JSONL and a snapshot is consistent.
+_ACP_SNAPSHOT_STATUSES = frozenset(
+    {
+        ConversationExecutionStatus.FINISHED,
+        ConversationExecutionStatus.PAUSED,
+        ConversationExecutionStatus.ERROR,
+        ConversationExecutionStatus.STUCK,
+    }
+)
+
+_acp_snapshot_service: AcpSessionSnapshotService | None = None
+
+
+def _get_acp_snapshot_service() -> AcpSessionSnapshotService:
+    # Module-level singleton so the per-conversation capture dedup is shared.
+    global _acp_snapshot_service
+    if _acp_snapshot_service is None:
+        _acp_snapshot_service = AcpSessionSnapshotService(
+            file_store=get_global_config().file_store
+        )
+    return _acp_snapshot_service
+
+
+def _extract_acp_agent_state(events: list[Event]) -> dict | None:
+    """Last ACP agent_state dict in the batch (incremental or full_state)."""
+    agent_state: dict | None = None
+    for event in events:
+        if not isinstance(event, ConversationStateUpdateEvent):
+            continue
+        candidate: object = None
+        if event.key == 'agent_state':
+            candidate = event.value
+        elif event.key == 'full_state' and isinstance(event.value, dict):
+            candidate = event.value.get('agent_state')
+        if isinstance(candidate, dict) and candidate.get('acp_session_id'):
+            agent_state = candidate
+    return agent_state
+
+
+def _acp_provider_for(app_conversation_info: AppConversationInfo) -> str | None:
+    snapshot = app_conversation_info.acp_agent_settings_snapshot
+    if snapshot is not None:
+        return snapshot.acp_server
+    return app_conversation_info.tags.get('acp_server')
+
+
+async def _handle_acp_session_events(
+    conversation_id: UUID,
+    app_conversation_info: AppConversationInfo,
+    sandbox_info: SandboxInfo,
+    events: list[Event],
+    app_conversation_info_service: AppConversationInfoService,
+) -> None:
+    """Mirror ACP session identity + snapshot session files at turn boundaries.
+
+    The two durable halves of native session/load resume (#1126): the session
+    id lands on conversation_metadata, the CLI's session-transcript blob lands
+    in the app server's FileStore. Both outlive the sandbox.
+    """
+    agent_state = _extract_acp_agent_state(events)
+    agent_version: str | None = None
+    if agent_state is not None:
+        session_id = agent_state.get('acp_session_id')
+        session_cwd = agent_state.get('acp_session_cwd')
+        agent_version = agent_state.get('acp_agent_version')
+        if (
+            session_id != app_conversation_info.acp_session_id
+            or session_cwd != app_conversation_info.acp_session_cwd
+            or (
+                agent_version is not None
+                and agent_version != app_conversation_info.acp_agent_version
+            )
+        ):
+            await app_conversation_info_service.update_acp_session(
+                conversation_id,
+                session_id=session_id,
+                session_cwd=session_cwd,
+                agent_version=agent_version,
+            )
+
+    at_turn_boundary = False
+    for event in events:
+        if not isinstance(event, ConversationStateUpdateEvent):
+            continue
+        if event.key != 'execution_status':
+            continue
+        try:
+            if ConversationExecutionStatus(event.value) in _ACP_SNAPSHOT_STATUSES:
+                at_turn_boundary = True
+        except ValueError:
+            continue
+    if not at_turn_boundary:
+        return
+    provider = _acp_provider_for(app_conversation_info)
+    if not supports_native_session_resume(provider):
+        return
+    assert provider is not None
+    # Background: blob capture must not delay the webhook response.
+    asyncio.create_task(
+        _get_acp_snapshot_service().capture(
+            conversation_id=conversation_id,
+            provider=provider,
+            sandbox=sandbox_info,
+            user_id=sandbox_info.created_by_user_id,
+            agent_version=agent_version
+            or app_conversation_info.acp_agent_version,
+        )
     )
 
 
@@ -410,6 +525,7 @@ async def on_event(
     events: list[Event],
     conversation_id: UUID,
     app_conversation_info: AppConversationInfo = Depends(valid_conversation),
+    sandbox_info: SandboxInfo = Depends(valid_sandbox),
     app_conversation_info_service: AppConversationInfoService = app_conversation_info_service_dependency,
     event_service: EventService = event_service_dependency,
 ) -> Success:
@@ -464,6 +580,21 @@ async def on_event(
                     )
             except Exception:
                 _logger.exception('analytics:conversation_terminal:failed')
+
+        # ACP native resume (#14506 / agent-canvas#1126): mirror the CLI
+        # session identity onto the conversation row and snapshot the CLI's
+        # session files at turn boundaries — both survive sandbox recycles.
+        if app_conversation_info.agent_kind == 'acp':
+            try:
+                await _handle_acp_session_events(
+                    conversation_id,
+                    app_conversation_info,
+                    sandbox_info,
+                    events,
+                    app_conversation_info_service,
+                )
+            except Exception:
+                _logger.exception('acp:session_mirror:failed')
 
         asyncio.create_task(
             _run_callbacks_in_bg_and_close(

@@ -40,6 +40,10 @@ from openhands.app_server.app_conversation.app_conversation_models import (
     PluginSpec,
     SandboxGroupingStrategy,
 )
+from openhands.app_server.app_conversation.acp_session_snapshot_service import (
+    AcpSessionSnapshotService,
+    supports_native_session_resume,
+)
 from openhands.app_server.app_conversation.app_conversation_service import (
     AppConversationService,
     AppConversationServiceInjector,
@@ -59,6 +63,7 @@ from openhands.app_server.app_conversation.sql_app_conversation_info_service imp
 )
 from openhands.app_server.config import (
     get_event_callback_service,
+    get_global_config,
     resolve_provider_llm_base_url,
 )
 from openhands.app_server.errors import SandboxError
@@ -96,7 +101,7 @@ from openhands.app_server.utils.llm_metadata import (
     get_llm_metadata,
     should_set_litellm_extra_body,
 )
-from openhands.sdk import Agent, AgentContext, LocalWorkspace
+from openhands.sdk import Agent, AgentBase, AgentContext, LocalWorkspace
 from openhands.sdk.event import RESUME_CONTEXT_MARKER, render_resume_transcript
 from openhands.sdk.event.acp_tool_call import ACPToolCallEvent
 from openhands.sdk.hooks import HookConfig
@@ -417,6 +422,14 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
     openhands_provider_base_url: str | None
     access_token_hard_timeout: timedelta | None
     app_mode: str | None = None
+    _acp_snapshot_service: AcpSessionSnapshotService | None = None
+
+    def _get_acp_snapshot_service(self) -> AcpSessionSnapshotService:
+        if self._acp_snapshot_service is None:
+            self._acp_snapshot_service = AcpSessionSnapshotService(
+                file_store=get_global_config().file_store
+            )
+        return self._acp_snapshot_service
 
     async def _get_sandbox_grouping_strategy(self) -> SandboxGroupingStrategy:
         """Get the sandbox grouping strategy from user settings."""
@@ -1986,6 +1999,83 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             run=getattr(initial_message, 'run', None),
         )
 
+    async def _prepare_native_acp_resume(
+        self,
+        *,
+        sandbox: SandboxInfo,
+        conversation_id: UUID,
+        existing_info: AppConversationInfo | None,
+        expected_cwd: str,
+    ) -> str | None:
+        """Arrange native session/load resume; return the session id when viable.
+
+        Viable means: the durable mirror has a session id for a provider with
+        reliable session/load (claude-code/codex — not gemini), the recorded
+        session cwd matches the sandbox working dir the CLI will get, and the
+        CLI's session files are present in the sandbox after a restore attempt
+        (seeded from the FileStore snapshot, or already live on a surviving
+        volume). Returns None otherwise so the caller falls back to
+        bootstrap-prompt resume.
+        """
+        if existing_info is None:
+            return None
+        session_id = existing_info.acp_session_id
+        if not session_id:
+            return None
+        snapshot = existing_info.acp_agent_settings_snapshot
+        provider = (
+            snapshot.acp_server
+            if snapshot is not None
+            else existing_info.tags.get('acp_server')
+        )
+        if not supports_native_session_resume(provider):
+            return None
+        assert provider is not None
+        if (
+            existing_info.acp_session_cwd
+            and existing_info.acp_session_cwd != expected_cwd
+        ):
+            _logger.warning(
+                'Mirrored ACP session cwd %r != sandbox working dir %r for %s; '
+                'falling back to bootstrap resume',
+                existing_info.acp_session_cwd,
+                expected_cwd,
+                conversation_id,
+            )
+            return None
+        user_id = await self.user_context.get_user_id()
+        restored = await self._get_acp_snapshot_service().restore_into_sandbox(
+            conversation_id=conversation_id,
+            provider=provider,
+            sandbox=sandbox,
+            user_id=user_id,
+        )
+        if not restored:
+            return None
+        return session_id
+
+    def _apply_acp_resume_fields(
+        self, acp_agent: AgentBase, resume_session_id: str | None
+    ) -> AgentBase:
+        """Stamp per-conversation resume/isolation fields onto the ACP agent.
+
+        ``acp_isolate_data_dir`` relocates the CLI's data root to the
+        per-conversation tree on every start — the precondition for both
+        sandbox-sharing isolation (#1019) and session snapshots (#1126).
+        ``acp_resume_session_id`` makes the SDK call session/load instead of
+        new_session. Both are presence-guarded so an older pinned SDK degrades
+        to current behavior instead of failing validation.
+        """
+        update: dict = {}
+        fields = type(acp_agent).model_fields
+        if 'acp_isolate_data_dir' in fields:
+            update['acp_isolate_data_dir'] = True
+        if resume_session_id and 'acp_resume_session_id' in fields:
+            update['acp_resume_session_id'] = resume_session_id
+        if not update:
+            return acp_agent
+        return acp_agent.model_copy(update=update)
+
     async def _build_acp_start_conversation_request(
         self,
         sandbox: SandboxInfo,
@@ -2036,15 +2126,35 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                     )
                 secrets[name] = StaticSecret(value=value)
 
-        # --- bootstrap-prompt resume (Solution A of issue #14260) -----------
-        # If this conversation has prior events in the durable store the sandbox
-        # was recycled and the ACP server's session storage is gone.  Synthesize
-        # the history as the opening content block so the agent has context.
-        resume_result = await self._synthesize_acp_resume_initial_message(
-            conversation_id, initial_message
+        existing_info = (
+            await self.app_conversation_info_service.get_app_conversation_info(  # noqa: E501
+                conversation_id
+            )
         )
-        if resume_result is not None:
-            initial_message = resume_result
+
+        # --- native session/load resume (Tier B, agent-canvas#1126) ---------
+        # When the durable mirror has a session id AND the CLI's session files
+        # are restorable into the sandbox (from the FileStore snapshot, or
+        # still live on a surviving volume), resume the CLI's own session via
+        # acp_resume_session_id — full native fidelity, no synthesized prompt.
+        resume_session_id = await self._prepare_native_acp_resume(
+            sandbox=sandbox,
+            conversation_id=conversation_id,
+            existing_info=existing_info,
+            expected_cwd=project_dir,
+        )
+
+        # --- bootstrap-prompt resume (Solution A of issue #14260) -----------
+        # Fallback ladder below native resume: when the session files are
+        # unrecoverable (or the provider has no reliable session/load, e.g.
+        # gemini-cli), start a fresh new_session and synthesize the prior
+        # history from the durable event store as the opening content block.
+        if resume_session_id is None:
+            resume_result = await self._synthesize_acp_resume_initial_message(
+                conversation_id, initial_message
+            )
+            if resume_result is not None:
+                initial_message = resume_result
 
         # --- build the ACP agent ------------------------------------------
         live_settings = user.agent_settings  # already verified to be ACPAgentSettings
@@ -2058,11 +2168,6 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         # were stripped from the snapshot and are re-attached here from the live
         # vault. Falls back to live settings on a fresh conversation, or for ACP
         # conversations created before snapshotting landed.
-        existing_info = (
-            await self.app_conversation_info_service.get_app_conversation_info(  # noqa: E501
-                conversation_id
-            )
-        )
         snapshot = existing_info.acp_agent_settings_snapshot if existing_info else None
         acp_settings = (
             _restore_acp_settings(snapshot, live_settings)
@@ -2078,6 +2183,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             {'agent_context': agent_context} if agent_context is not None else {}
         )
         acp_agent = acp_settings.model_copy(update=settings_update).create_agent()
+        acp_agent = self._apply_acp_resume_fields(acp_agent, resume_session_id)
 
         sdk_plugins: list[PluginSource] | None = None
         if plugins:
@@ -2376,7 +2482,16 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
             # Delete from database using the conversation info from app_conversation
             # AppConversation extends AppConversationInfo, so we can use it directly
-            return await self._delete_from_database(app_conversation)
+            deleted = await self._delete_from_database(app_conversation)
+
+            # GC the conversation's durable ACP session snapshots (best-effort,
+            # parity with event cleanup).
+            if deleted and app_conversation.agent_kind == 'acp':
+                user_id = await self.user_context.get_user_id()
+                await self._get_acp_snapshot_service().delete(
+                    conversation_id=conversation_id, user_id=user_id
+                )
+            return deleted
 
         except Exception as e:
             _logger.error(

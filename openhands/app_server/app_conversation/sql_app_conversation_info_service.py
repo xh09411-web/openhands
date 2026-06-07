@@ -128,6 +128,14 @@ class StoredConversationMetadata(Base):
         create_json_type_decorator(ACPAgentSettings | None), nullable=True
     )
 
+    # Durable mirror of the ACP CLI session identity (harvested from the
+    # agent_state webhook stream). Survives sandbox recycles so the rebuild
+    # can feed ACPAgent.acp_resume_session_id for native session/load resume
+    # (#14506 / #1126). NULL for non-ACP conversations.
+    acp_session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    acp_session_cwd: Mapped[str | None] = mapped_column(String, nullable=True)
+    acp_agent_version: Mapped[str | None] = mapped_column(String, nullable=True)
+
 
 @dataclass
 class SQLAppConversationInfoService(AppConversationInfoService):
@@ -394,6 +402,9 @@ class SQLAppConversationInfoService(AppConversationInfoService):
             public=info.public,
             tags=info.tags if info.tags else None,
             acp_agent_settings_snapshot=info.acp_agent_settings_snapshot,
+            acp_session_id=info.acp_session_id,
+            acp_session_cwd=info.acp_session_cwd,
+            acp_agent_version=info.acp_agent_version,
         )
 
         await self.db_session.merge(stored)
@@ -480,6 +491,37 @@ class SQLAppConversationInfoService(AppConversationInfoService):
         # Update last_updated_at timestamp
         stored.last_updated_at = utc_now()
 
+        await self.db_session.commit()
+
+    async def update_acp_session(
+        self,
+        conversation_id: UUID,
+        *,
+        session_id: str | None,
+        session_cwd: str | None,
+        agent_version: str | None = None,
+    ) -> None:
+        """Targeted update of the mirrored ACP session identity.
+
+        Touches only the acp_session_* columns so a webhook-driven mirror
+        can't clobber concurrent writes to the rest of the row.
+        """
+        query = await self._secure_select()
+        query = query.where(
+            StoredConversationMetadata.conversation_id == str(conversation_id)
+        )
+        result = await self.db_session.execute(query)
+        stored = result.scalar_one_or_none()
+        if not stored:
+            logger.debug(
+                'Conversation %s not found, skipping ACP session mirror',
+                conversation_id,
+            )
+            return
+        stored.acp_session_id = session_id
+        stored.acp_session_cwd = session_cwd
+        if agent_version is not None:
+            stored.acp_agent_version = agent_version
         await self.db_session.commit()
 
     async def process_stats_event(
@@ -584,6 +626,9 @@ class SQLAppConversationInfoService(AppConversationInfoService):
             public=stored.public,
             tags=stored.tags or {},
             acp_agent_settings_snapshot=stored.acp_agent_settings_snapshot,
+            acp_session_id=stored.acp_session_id,
+            acp_session_cwd=stored.acp_session_cwd,
+            acp_agent_version=stored.acp_agent_version,
             created_at=created_at,
             updated_at=updated_at,
         )

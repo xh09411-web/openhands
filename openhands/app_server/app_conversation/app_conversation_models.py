@@ -122,6 +122,16 @@ class AppConversationInfo(BaseModel):
         default=None, exclude=True
     )
 
+    # Durable mirror of the ACP CLI session identity, harvested from the
+    # ConversationStateUpdateEvent(key='agent_state') webhook stream. On a
+    # recycled sandbox the filesystem copy (base_state.json) is gone; this
+    # mirror is what feeds ACPAgent.acp_resume_session_id so native
+    # session/load resume survives the recycle (#14506 / #1126). Server-private:
+    # excluded from API serialization like the spec snapshot above.
+    acp_session_id: str | None = Field(default=None, exclude=True)
+    acp_session_cwd: str | None = Field(default=None, exclude=True)
+    acp_agent_version: str | None = Field(default=None, exclude=True)
+
     metrics: MetricsSnapshot | None = None
 
     parent_conversation_id: OpenHandsUUID | None = None

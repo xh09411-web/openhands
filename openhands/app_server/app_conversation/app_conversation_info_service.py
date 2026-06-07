@@ -116,6 +116,28 @@ class AppConversationInfoService(ABC):
             conversation_id: The ID of the conversation to update
         """
 
+    async def update_acp_session(
+        self,
+        conversation_id: UUID,
+        *,
+        session_id: str | None,
+        session_cwd: str | None,
+        agent_version: str | None = None,
+    ) -> None:
+        """Mirror the ACP CLI session identity onto the conversation record.
+
+        Default read-modify-write implementation; SQL-backed services override
+        with a targeted column update.
+        """
+        info = await self.get_app_conversation_info(conversation_id)
+        if info is None:
+            return
+        info.acp_session_id = session_id
+        info.acp_session_cwd = session_cwd
+        if agent_version is not None:
+            info.acp_agent_version = agent_version
+        await self.save_app_conversation_info(info)
+
 
 class AppConversationInfoServiceInjector(
     DiscriminatedUnionMixin, Injector[AppConversationInfoService], ABC
