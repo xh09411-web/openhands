@@ -1,19 +1,23 @@
-// For format details, see: https://aka.ms/devcontainer.json
 {
-	"name": "Python 3",
-	// Documentation for this image:
-	// - https://github.com/devcontainers/templates/tree/main/src/python
-	// - https://github.com/microsoft/vscode-remote-try-python
-	// - https://hub.docker.com/r/microsoft/devcontainers-python
-	"image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
-	"features": {
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-		"ghcr.io/devcontainers-extra/features/poetry:2": {},
-		"ghcr.io/devcontainers/features/node:1": {},
-	},
-	"postCreateCommand": ".devcontainer/setup.sh",
-	"runArgs": ["--add-host=host.docker.internal:host-gateway"],
-	"containerEnv": {
-		"DOCKER_HOST_ADDR": "host.docker.internal"
-	},
+  "name": "Python 3",
+  "image": "://microsoft.com",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers-extra/features/poetry:2": {},
+    "ghcr.io/devcontainers/features/node:1": {}
+  },
+  "forwardPorts":,
+  "portsAttributes": {
+    "3000": {
+      "label": "OpenHands",
+      "onAutoForward": "ignore",
+      "visibility": "public"
+    }
+  },
+  "postStartCommand": "docker run -d --pull always -v /var/run/docker.sock:/var/run/docker.sock -p 3000:3000 --add-host=host.docker.internal:host-gateway ghcr.io/all-hands-ai/openhands:main",
+  "postCreateCommand": ".devcontainer/setup.sh",
+  "runArgs": ["--add-host=host.docker.internal:host-gateway"],
+  "containerEnv": {
+    "DOCKER_HOST_ADDR": "host.docker.internal"
+  }
 }
