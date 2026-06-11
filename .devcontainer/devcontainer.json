@@ -1,23 +1,17 @@
 {
-  "name": "Python 3",
+  "name": "OpenHands Development",
   "image": "://microsoft.com",
   "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-    "ghcr.io/devcontainers-extra/features/poetry:2": {},
-    "ghcr.io/devcontainers/features/node:1": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
-  "forwardPorts":,
-  "portsAttributes": {
-    "3000": {
-      "label": "OpenHands",
-      "onAutoForward": "ignore",
-      "visibility": "public"
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker"
+      ]
     }
   },
-  "postStartCommand": "docker run -d --pull always -v /var/run/docker.sock:/var/run/docker.sock -p 3000:3000 --add-host=host.docker.internal:host-gateway ghcr.io/all-hands-ai/openhands:main",
-  "postCreateCommand": ".devcontainer/setup.sh",
-  "runArgs": ["--add-host=host.docker.internal:host-gateway"],
-  "containerEnv": {
-    "DOCKER_HOST_ADDR": "host.docker.internal"
-  }
+  "forwardPorts": [],
+  "postCreateCommand": "pip install --upgrade pip"
 }
