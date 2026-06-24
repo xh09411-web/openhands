@@ -1,0 +1,10 @@
+vector_store:
+  provider: qdrant
+  config:
+    url: http://host.docker.internal:6333
+    collection_name: mem0
+llm:
+  provider: ollama
+  config:
+    model: qwen3.6:35b
+    ollama_base_url: http://host.docker.internal:11434
