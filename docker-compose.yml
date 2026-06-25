@@ -1,3 +1,6 @@
+- N8N_SECURE_COOKIE=false
+      - N8N_HOST=0.0.0.0
+      - N8N_PROTOCOL=http
 version: "3.9"
 services:
   ollama:
