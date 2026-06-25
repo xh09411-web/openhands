@@ -18,7 +18,7 @@ services:
   openhands:
     image: ghcr.io/all-hands-ai/openhands:0.34
     container_name: openhands_v6
-    ports: ["3001:3001"]
+    ports: ["3001:3000"]
     environment:
       - LLM_API_KEY=sk-dummy
       - LLM_BASE_URL=http://litellm_v6:4000
