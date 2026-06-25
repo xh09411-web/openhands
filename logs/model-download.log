@@ -1,2 +1,54 @@
-[Wed Jun 24 17:46:03 CEST 2026] 開始下載模型...
-[Wed Jun 24 17:46:03 CEST 2026] 下載 qwen3-coder:30b ...
+[Wed Jun 24 17:49:12 CEST 2026] 開始下載模型...
+[Wed Jun 24 17:49:12 CEST 2026] 下載 qwen3-coder:30b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ qwen3-coder:30b 下載失敗
+[Wed Jun 24 17:49:13 CEST 2026] 下載 deepseek-r1:32b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ deepseek-r1:32b 下載失敗
+[Wed Jun 24 17:49:13 CEST 2026] 下載 glm-5:30b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ glm-5:30b 下載失敗
+[Wed Jun 24 17:49:13 CEST 2026] 下載 gemma-4:31b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ gemma-4:31b 下載失敗
+[Wed Jun 24 17:49:13 CEST 2026] 下載 qwen3.6:35b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ qwen3.6:35b 下載失敗
+[Wed Jun 24 17:49:13 CEST 2026] 下載 nomic-embed-text ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ nomic-embed-text 下載失敗
+[Wed Jun 24 17:49:13 CEST 2026] 全部下載完成！
+Error: something went wrong, please see the ollama server logs for details
+[Wed Jun 24 17:51:09 CEST 2026] 開始下載模型...
+[Wed Jun 24 17:51:09 CEST 2026] 下載 qwen3-coder:30b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ qwen3-coder:30b 下載失敗
+[Wed Jun 24 17:51:09 CEST 2026] 下載 deepseek-r1:32b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ deepseek-r1:32b 下載失敗
+[Wed Jun 24 17:51:10 CEST 2026] 下載 glm-5:30b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ glm-5:30b 下載失敗
+[Wed Jun 24 17:51:10 CEST 2026] 下載 gemma-4:31b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ gemma-4:31b 下載失敗
+[Wed Jun 24 17:51:10 CEST 2026] 下載 qwen3.6:35b ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ qwen3.6:35b 下載失敗
+[Wed Jun 24 17:51:10 CEST 2026] 下載 nomic-embed-text ...
+[?2026h[?25l[1G[?25h[?2026l
+Error: 401 Unauthorized: Unauthorized
+⚠️ nomic-embed-text 下載失敗
+[Wed Jun 24 17:51:10 CEST 2026] 全部下載完成！
+Error: something went wrong, please see the ollama server logs for details

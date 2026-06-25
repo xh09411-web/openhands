@@ -1,0 +1,59 @@
+version: "3.9"
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_v6
+    ports: ["11435:11434"]
+    volumes: [ollama:/root/.ollama]
+    environment: [OLLAMA_KEEP_ALIVE=5m]
+    restart: unless-stopped
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm_v6
+    ports: ["4001:4000"]
+    volumes: [./litellm/config.yaml:/app/config.yaml]
+    command: ["--config", "/app/config.yaml"]
+    depends_on: [ollama]
+    restart: unless-stopped
+  openhands:
+    image: ghcr.io/all-hands-ai/openhands:0.34
+    container_name: openhands_v6
+    ports: ["3001:3001"]
+    environment:
+      - LLM_API_KEY=sk-dummy
+      - LLM_BASE_URL=http://litellm_v6:4000
+      - LLM_MODEL=planner
+      - WORKSPACE_DIR=/workspace
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/all-hands-ai/openhands:0.34
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace:/workspace
+      - ~/.ssh:/home/openhands/.ssh:ro
+    depends_on: [litellm]
+    restart: unless-stopped
+  n8n:
+    image: n8nio/n8n:1.95.0
+    container_name: n8n_v6
+    ports: ["5678:5678"]
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=admin123
+    volumes: [n8n_v6:/home/node/.n8n]
+    restart: unless-stopped
+  qdrant:
+    image: qdrant/qdrant:v1.15.0
+    container_name: qdrant_v6
+    ports: ["6333:6333"]
+    volumes: [qdrant_v6:/qdrant/storage]
+    restart: unless-stopped
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng_v6
+    ports: ["8081:8080"]
+    volumes: [./searxng:/etc/searxng:ro]
+    restart: unless-stopped
+volumes:
+  ollama: {external: false}
+  n8n_v6: {external: false}
+  qdrant_v6: {external: false}
