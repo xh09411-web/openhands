@@ -21,7 +21,7 @@ services:
     ports: ["3001:3000"]
     environment:
       - LLM_API_KEY=sk-dummy
-      - LLM_BASE_URL=http://litellm_v6:4000
+      - LLM_BASE_URL=http://46.250.254.189:4001/v1
       - LLM_MODEL=planner
       - WORKSPACE_DIR=/workspace
       - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/all-hands-ai/openhands:0.34
