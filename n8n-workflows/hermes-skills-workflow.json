@@ -1,0 +1,54 @@
+{
+  "name": "Hermes Skills Dispatcher",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {"name": "skill", "value": "={{ $json.body.skill }}"},
+            {"name": "prompt", "value": "={{ $json.body.prompt }}"}
+          ]
+        }
+      },
+      "name": "Set Skill Context",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://litellm_v6:4000/v1/chat/completions",
+        "method": "POST",
+        "headers": {"Authorization": "Bearer sk-dummy"},
+        "body": {
+          "model": "planner",
+          "messages": [
+            {"role": "system", "content": "={{ $('Set Skill Context').item.json.skill == 'gstack' ? 'You are a virtual engineering team.' : 'You are a knowledge graph assistant.' }}"},
+            {"role": "user", "content": "={{ $('Set Skill Context').item.json.prompt }}"}
+          ]
+        }
+      },
+      "name": "Call LiteLLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {"name": "response", "value": "={{ $json.choices[0].message.content }}"}
+          ]
+        }
+      },
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [850, 300]
+    }
+  ],
+  "connections": {}
+}
