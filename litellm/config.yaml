@@ -1,23 +1,99 @@
 model_list:
-  - model_name: planner
+  # ========== 本地 Ollama 模型（已下载） ==========
+  - model_name: qwen3-coder
     litellm_params:
-      model: ollama/qwen2.5-coder:32b
-      api_base: http://ollama_v6:11434
-  - model_name: coder
+      model: ollama/qwen3-coder:30b
+      api_base: http://172.17.0.2:11434
+  - model_name: deepseek-r1
     litellm_params:
-      model: ollama/codestral:22b
-      api_base: http://ollama_v6:11434
-  - model_name: debug
+      model: ollama/deepseek-r1:32b
+      api_base: http://172.17.0.2:11434
+  - model_name: qwythos
     litellm_params:
-      model: ollama/deepseek-coder-v2:16b-lite
-      api_base: http://ollama_v6:11434
-  - model_name: fast
+      model: ollama/qwythos:9b
+      api_base: http://172.17.0.2:11434
+
+  # ========== OpenAI（GPT-4 / GPT-4o 等） ==========
+  - model_name: openai-gpt4
     litellm_params:
-      model: ollama/deepseek-coder:6.7b-instruct
-      api_base: http://ollama_v6:11434
-  - model_name: embed
+      model: openai/gpt-4
+      api_key: YOUR_OPENAI_KEY
+  - model_name: openai-gpt4o
     litellm_params:
-      model: ollama/nomic-embed-text
-      api_base: http://ollama_v6:11434
+      model: openai/gpt-4o
+      api_key: YOUR_OPENAI_KEY
+
+  # ========== Anthropic Claude ==========
+  - model_name: claude-3-opus
+    litellm_params:
+      model: anthropic/claude-3-opus-20240229
+      api_key: YOUR_ANTHROPIC_KEY
+  - model_name: claude-3-sonnet
+    litellm_params:
+      model: anthropic/claude-3-sonnet-20240229
+      api_key: YOUR_ANTHROPIC_KEY
+
+  # ========== Google Gemini ==========
+  - model_name: gemini-pro
+    litellm_params:
+      model: gemini/gemini-pro
+      api_key: YOUR_GOOGLE_KEY
+  - model_name: gemini-1.5-flash
+    litellm_params:
+      model: gemini/gemini-1.5-flash
+      api_key: YOUR_GOOGLE_KEY
+
+  # ========== NVIDIA NIM ==========
+  - model_name: nvidia-llama3-70b
+    litellm_params:
+      model: openai/meta/llama3-70b-instruct
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: YOUR_NVIDIA_KEY
+
+  # ========== GitHub Models（學生包） ==========
+  - model_name: github-gpt4o
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_base: https://models.inference.ai.azure.com/v1
+      api_key: YOUR_GITHUB_TOKEN
+
+  # ========== Azure OpenAI ==========
+  - model_name: azure-gpt4
+    litellm_params:
+      model: azure/gpt-4
+      api_base: https://YOUR_RESOURCE.openai.azure.com/
+      api_key: YOUR_AZURE_KEY
+      api_version: 2024-02-15-preview
+
+  # ========== Poe（透過 OpenRouter 或直接） ==========
+  # Poe 本身不直接提供 API，但可透過 OpenRouter 存取
+  - model_name: poe-gpt4
+    litellm_params:
+      model: openai/gpt-4
+      api_base: https://openrouter.ai/api/v1
+      api_key: YOUR_OPENROUTER_KEY
+
+  # ========== OpenRouter（聚合多模型） ==========
+  - model_name: openrouter-claude3
+    litellm_params:
+      model: anthropic/claude-3-opus
+      api_base: https://openrouter.ai/api/v1
+      api_key: YOUR_OPENROUTER_KEY
+  - model_name: openrouter-gemini
+    litellm_params:
+      model: google/gemini-pro
+      api_base: https://openrouter.ai/api/v1
+      api_key: YOUR_OPENROUTER_KEY
+
+  # ========== 其他常見（Mistral、Cohere 等） ==========
+  - model_name: mistral-large
+    litellm_params:
+      model: mistral/mistral-large-latest
+      api_key: YOUR_MISTRAL_KEY
+  - model_name: cohere-command
+    litellm_params:
+      model: cohere/command-r-plus
+      api_key: YOUR_COHERE_KEY
+
 general_settings:
   master_key: sk-dummy
